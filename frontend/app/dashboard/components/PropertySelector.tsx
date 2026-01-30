@@ -69,8 +69,8 @@ export function PropertySelector({ selectedPropertyId, onSelect }: Props) {
   }
 
   return (
-    <div className="flex items-center gap-2.5">
-      <BarChart3 className="w-4 h-4 text-[#6b7280]" />
+    <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+      <BarChart3 className="w-4 h-4 text-[#6b7280] shrink-0 hidden sm:block" />
       <Select
         value={selectedPropertyId || undefined}
         onValueChange={(value) => {
@@ -78,7 +78,7 @@ export function PropertySelector({ selectedPropertyId, onSelect }: Props) {
           if (prop) onSelect(prop);
         }}
       >
-        <SelectTrigger className="w-full max-w-[280px] h-9 text-sm border-[#e5e7eb] bg-white rounded-lg">
+        <SelectTrigger className="w-full max-w-[180px] sm:max-w-[280px] h-9 text-xs sm:text-sm border-[#e5e7eb] bg-white rounded-lg truncate">
           <SelectValue placeholder="プロパティを選択" />
         </SelectTrigger>
         <SelectContent>
@@ -89,7 +89,7 @@ export function PropertySelector({ selectedPropertyId, onSelect }: Props) {
               className="text-sm"
             >
               <span className="font-medium">{prop.property_name}</span>
-              <span className="text-[#6b7280] ml-2">
+              <span className="text-[#6b7280] ml-2 hidden sm:inline">
                 ({prop.account_name})
               </span>
             </SelectItem>
