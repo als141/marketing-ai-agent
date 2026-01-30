@@ -91,18 +91,29 @@
   }
 }
 
-/* Markdown table styles */
-.prose table {
-  @apply w-full border-collapse text-sm;
+/* ── Assistant Response Styles ── */
+.assistant-response {
+  position: relative;
 }
-.prose th {
-  @apply bg-muted px-3 py-2 text-left font-medium text-foreground border-b border-border;
+
+.assistant-response .report-content {
+  padding-left: 1rem;
+  border-left: 2px solid transparent;
 }
-.prose td {
-  @apply px-3 py-2 border-b border-border;
+
+/* Subtle left accent on hover for visual structure */
+.assistant-response:hover .report-content {
+  border-left-color: #f0f1f5;
 }
-.prose tr:last-child td {
-  @apply border-b-0;
+
+/* Table: numbers should be right-aligned for readability */
+.report-content table td:not(:first-child) {
+  text-align: right;
+}
+
+/* Striped table rows */
+.report-content table tbody tr:nth-child(even) {
+  background-color: #fafbfc;
 }
 
 /* Scrollbar */

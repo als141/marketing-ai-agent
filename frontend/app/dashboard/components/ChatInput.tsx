@@ -42,7 +42,7 @@ export function ChatInput({ onSend, isStreaming, onStop, disabled }: Props) {
 
   return (
     <div className="border-t border-[#e5e7eb] bg-white p-4">
-      <div className="flex items-end gap-3 max-w-3xl mx-auto">
+      <div className="flex items-end gap-3 max-w-4xl mx-auto">
         <Textarea
           ref={textareaRef}
           value={input}
