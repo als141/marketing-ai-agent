@@ -10,7 +10,7 @@ import { GoogleConnectButton } from "./components/GoogleConnectButton";
 import { useChat } from "@/lib/hooks/useChat";
 import { apiJson } from "@/lib/api";
 import type { PropertySummary, Conversation, GoogleAuthStatus, Message } from "@/lib/types";
-import { Loader2, CheckCircle2, Wifi } from "lucide-react";
+import { Loader2, CheckCircle2, Wifi, RefreshCw } from "lucide-react";
 
 export default function DashboardPage() {
   const { getToken } = useAuth();
@@ -94,11 +94,27 @@ export default function DashboardPage() {
   const handleSendMessage = useCallback(
     (content: string) => {
       sendMessage(content);
-      // Refresh sidebar after a delay to show new conversation
       setTimeout(() => setRefreshSidebar((prev) => prev + 1), 2000);
     },
     [sendMessage]
   );
+
+  const handleReconnectGoogle = useCallback(async () => {
+    try {
+      const token = await getToken();
+      // Disconnect first
+      await apiJson("/api/auth/google-disconnect", token, { method: "POST" });
+      // Then start new OAuth flow
+      const data = await apiJson<{ auth_url: string }>(
+        "/api/auth/google-connect",
+        token,
+        { method: "POST" }
+      );
+      window.location.href = data.auth_url;
+    } catch (err) {
+      console.error("Failed to reconnect Google:", err);
+    }
+  }, [getToken]);
 
   // Loading state
   if (googleConnected === null) {
@@ -149,9 +165,19 @@ export default function DashboardPage() {
             selectedPropertyId={selectedProperty?.property_id || null}
             onSelect={setSelectedProperty}
           />
-          <div className="flex items-center gap-2 text-xs text-[#6b7280]">
-            <Wifi className="w-3.5 h-3.5 text-[#10b981]" />
-            <span>MCP接続中</span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleReconnectGoogle}
+              className="flex items-center gap-1.5 text-xs text-[#6b7280] hover:text-[#1a1a2e] transition-colors cursor-pointer"
+              title="Google権限を更新（GSC追加）"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Google再連携</span>
+            </button>
+            <div className="flex items-center gap-1.5 text-xs text-[#6b7280]">
+              <Wifi className="w-3.5 h-3.5 text-[#10b981]" />
+              <span>MCP接続中</span>
+            </div>
           </div>
         </div>
 

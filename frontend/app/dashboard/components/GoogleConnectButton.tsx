@@ -61,9 +61,7 @@ export function GoogleConnectButton({
           Googleアカウントを連携
         </h3>
         <p className="text-sm text-[#6b7280] max-w-sm leading-relaxed">
-          Google Analytics
-          4のデータにアクセスするため、Googleアカウントとの連携が必要です。
-          読み取り専用の権限のみリクエストします。
+          Google Analytics 4とSearch Consoleのデータにアクセスするため、Googleアカウントとの連携が必要です。
         </p>
       </div>
       <Button

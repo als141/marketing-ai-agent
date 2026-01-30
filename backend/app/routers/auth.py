@@ -10,6 +10,7 @@ from app.deps import get_supabase
 from app.services.supabase_service import (
     get_or_create_user,
     update_user_google_token,
+    disconnect_user_google,
 )
 from app.models.schemas import GoogleAuthStatus, GoogleConnectResponse
 
@@ -17,6 +18,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/analytics.readonly",
+    "https://www.googleapis.com/auth/webmasters",
 ]
 
 # In-memory state store for CSRF protection
@@ -35,6 +37,15 @@ async def google_status(
     return GoogleAuthStatus(
         connected=db_user.get("google_connected", False),
     )
+
+
+@router.post("/google-disconnect")
+async def google_disconnect(
+    user: dict = Depends(get_current_user),
+):
+    supabase = get_supabase()
+    await disconnect_user_google(supabase, user["clerk_id"])
+    return {"status": "disconnected"}
 
 
 @router.post("/google-connect", response_model=GoogleConnectResponse)

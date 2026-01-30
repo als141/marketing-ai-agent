@@ -1,4 +1,6 @@
 import asyncio
+import os
+import sys
 import time
 from dataclasses import dataclass, field
 from agents.mcp import MCPServerStdio
@@ -8,6 +10,10 @@ from app.config import get_settings
 from app.services.credentials_manager import CredentialsManager
 
 SESSION_TIMEOUT_SECONDS = 600  # 10 minutes
+
+# Path to GSC MCP server script
+_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+GSC_SERVER_SCRIPT = os.path.join(_BACKEND_DIR, "scripts", "gsc_server.py")
 
 
 @dataclass
@@ -35,16 +41,20 @@ class MCPSessionManager:
             self._locks[user_id] = asyncio.Lock()
         return self._locks[user_id]
 
-    def create_mcp_server(self, user_id: str, refresh_token: str) -> MCPServerStdio:
+    def _get_creds_path(self, user_id: str, refresh_token: str) -> str:
         settings = get_settings()
-        creds_path = self.credentials_manager.create_credentials_file(
+        return self.credentials_manager.create_credentials_file(
             user_id=user_id,
             refresh_token=refresh_token,
             client_id=settings.google_oauth_client_id,
             client_secret=settings.google_oauth_client_secret,
             quota_project_id=settings.google_project_id,
         )
-        server = MCPServerStdio(
+
+    def create_ga4_server(self, user_id: str, refresh_token: str) -> MCPServerStdio:
+        settings = get_settings()
+        creds_path = self._get_creds_path(user_id, refresh_token)
+        return MCPServerStdio(
             params=MCPServerStdioParams(
                 command="analytics-mcp",
                 args=[],
@@ -58,7 +68,24 @@ class MCPSessionManager:
             cache_tools_list=True,
             client_session_timeout_seconds=30,
         )
-        return server
+
+    def create_gsc_server(self, user_id: str, refresh_token: str) -> MCPServerStdio:
+        creds_path = self._get_creds_path(user_id, refresh_token)
+        return MCPServerStdio(
+            params=MCPServerStdioParams(
+                command=sys.executable,
+                args=[GSC_SERVER_SCRIPT],
+                env={
+                    "GSC_TOKEN_FILE": creds_path,
+                },
+            ),
+            cache_tools_list=True,
+            client_session_timeout_seconds=30,
+        )
+
+    # Backward compat alias
+    def create_mcp_server(self, user_id: str, refresh_token: str) -> MCPServerStdio:
+        return self.create_ga4_server(user_id, refresh_token)
 
     async def cleanup_expired(self):
         expired_users = [

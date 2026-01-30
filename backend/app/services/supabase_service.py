@@ -36,3 +36,13 @@ async def get_user_google_token(supabase: Client, clerk_id: str) -> str | None:
     if result.data and result.data[0].get("google_refresh_token"):
         return result.data[0]["google_refresh_token"]
     return None
+
+
+async def disconnect_user_google(supabase: Client, clerk_id: str) -> dict:
+    result = (
+        supabase.table("users")
+        .update({"google_refresh_token": None, "google_connected": False})
+        .eq("clerk_id", clerk_id)
+        .execute()
+    )
+    return result.data[0] if result.data else {}
