@@ -91,19 +91,56 @@ class AgentService:
                 return []
 
             result = await mcp_server.call_tool("get_account_summaries", {})
-            if result and hasattr(result, "content"):
-                for content_item in result.content:
-                    if hasattr(content_item, "text"):
-                        data = json.loads(content_item.text)
-                        properties = []
-                        if isinstance(data, list):
-                            for account in data:
-                                account_name = account.get("displayName", account.get("account", ""))
-                                for prop_summary in account.get("propertySummaries", []):
-                                    properties.append({
-                                        "property_id": prop_summary.get("property", ""),
-                                        "property_name": prop_summary.get("displayName", ""),
-                                        "account_name": account_name,
-                                    })
-                        return properties
-            return []
+            properties = []
+
+            if not result or not hasattr(result, "content"):
+                print("[Properties] No result or no content from MCP")
+                return []
+
+            # Each TextContent in result.content is a separate account summary JSON
+            for content_item in result.content:
+                if not hasattr(content_item, "text"):
+                    continue
+
+                data = json.loads(content_item.text)
+
+                # Collect account summaries from this content item
+                accounts = []
+                if isinstance(data, dict):
+                    if "property_summaries" in data or "propertySummaries" in data:
+                        # Direct account summary object
+                        accounts = [data]
+                    elif "account_summaries" in data or "accountSummaries" in data:
+                        # Page response wrapping multiple accounts
+                        accounts = (
+                            data.get("account_summaries")
+                            or data.get("accountSummaries")
+                            or []
+                        )
+                elif isinstance(data, list):
+                    accounts = data
+
+                for account in accounts:
+                    account_name = (
+                        account.get("display_name")
+                        or account.get("displayName")
+                        or account.get("account", "")
+                    )
+                    prop_summaries = (
+                        account.get("property_summaries")
+                        or account.get("propertySummaries")
+                        or []
+                    )
+                    for prop in prop_summaries:
+                        properties.append({
+                            "property_id": prop.get("property", ""),
+                            "property_name": (
+                                prop.get("display_name")
+                                or prop.get("displayName")
+                                or ""
+                            ),
+                            "account_name": account_name,
+                        })
+
+            print(f"[Properties] Extracted {len(properties)} properties")
+            return properties

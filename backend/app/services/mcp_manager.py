@@ -42,6 +42,7 @@ class MCPSessionManager:
             refresh_token=refresh_token,
             client_id=settings.google_oauth_client_id,
             client_secret=settings.google_oauth_client_secret,
+            quota_project_id=settings.google_project_id,
         )
         server = MCPServerStdio(
             params=MCPServerStdioParams(
@@ -49,7 +50,9 @@ class MCPSessionManager:
                 args=[],
                 env={
                     "GOOGLE_APPLICATION_CREDENTIALS": creds_path,
-                    "GOOGLE_PROJECT_ID": settings.google_project_id,
+                    "GOOGLE_CLOUD_PROJECT": settings.google_project_id,
+                    "GCLOUD_PROJECT": settings.google_project_id,
+                    "GOOGLE_CLOUD_QUOTA_PROJECT": settings.google_project_id,
                 },
             ),
             cache_tools_list=True,

@@ -15,6 +15,7 @@ class CredentialsManager:
         refresh_token: str,
         client_id: str,
         client_secret: str,
+        quota_project_id: str = "",
     ) -> str:
         user_dir = os.path.join(self.base_dir, user_id)
         os.makedirs(user_dir, exist_ok=True)
@@ -25,6 +26,7 @@ class CredentialsManager:
             "client_id": client_id,
             "client_secret": client_secret,
             "refresh_token": refresh_token,
+            "quota_project_id": quota_project_id,
         }
 
         fd = os.open(creds_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
