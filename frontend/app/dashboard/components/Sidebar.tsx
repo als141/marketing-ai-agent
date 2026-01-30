@@ -102,9 +102,14 @@ export function Sidebar({
         ) : (
           <div className="space-y-0.5">
             {conversations.map((conv) => (
-              <button
+              <div
                 key={conv.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => onSelectConversation(conv)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") onSelectConversation(conv);
+                }}
                 className={`group w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors duration-150 cursor-pointer ${
                   currentConversationId === conv.id
                     ? "bg-[#f0f1f5] text-[#1a1a2e]"
@@ -121,7 +126,7 @@ export function Sidebar({
                 >
                   <Trash2 className="w-3 h-3" />
                 </button>
-              </button>
+              </div>
             ))}
           </div>
         )}
