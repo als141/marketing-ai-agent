@@ -45,13 +45,18 @@ class AgentService:
             async for event in result.stream_events():
                 if event.type == "raw_response_event":
                     data = event.data
-                    if hasattr(data, "delta") and data.delta:
-                        yield {"type": "text_delta", "content": data.delta}
-                    elif hasattr(data, "type"):
-                        if data.type == "response.created":
-                            yield {"type": "response_created"}
-                        elif data.type == "response.completed":
-                            pass
+                    event_type = getattr(data, "type", "")
+                    # Only emit text deltas for actual output text, not function call arguments
+                    if event_type == "response.output_text.delta":
+                        delta = getattr(data, "delta", "")
+                        if delta:
+                            yield {"type": "text_delta", "content": delta}
+                    elif event_type == "response.created":
+                        yield {"type": "response_created"}
+                    elif event_type == "response.completed":
+                        pass
+                    # Ignore: response.function_call_arguments.delta,
+                    #         response.output_item.added, etc.
                 elif event.type == "run_item_stream_event":
                     item = event.item
                     if hasattr(item, "type"):
