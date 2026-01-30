@@ -1,7 +1,8 @@
 import json
 from contextlib import AsyncExitStack
 from typing import AsyncGenerator
-from agents import Agent, Runner
+from agents import Agent, Runner, ModelSettings
+from openai.types.shared import Reasoning
 
 from app.services.mcp_manager import MCPSessionManager
 
@@ -114,6 +115,10 @@ GA4 property_id: {property_id}
                 instructions=self._build_system_prompt(property_id),
                 model="gpt-5.2",
                 mcp_servers=[ga4_server, gsc_server],
+                model_settings=ModelSettings(
+                    reasoning=Reasoning(effort="medium"),
+                    verbosity="low",
+                ),
             )
 
             input_messages = []
