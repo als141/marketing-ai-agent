@@ -1,20 +1,29 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, use } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useSearchParams } from "next/navigation";
-import { Sidebar } from "./components/Sidebar";
-import { ChatWindow } from "./components/ChatWindow";
-import { PropertySelector } from "./components/PropertySelector";
-import { GoogleConnectButton } from "./components/GoogleConnectButton";
+import { Sidebar } from "../components/Sidebar";
+import { ChatWindow } from "../components/ChatWindow";
+import { PropertySelector } from "../components/PropertySelector";
+import { GoogleConnectButton } from "../components/GoogleConnectButton";
 import { useChat } from "@/lib/hooks/useChat";
 import { apiJson } from "@/lib/api";
 import type { PropertySummary, Conversation, GoogleAuthStatus, Message } from "@/lib/types";
 import { Loader2, CheckCircle2, Wifi, RefreshCw } from "lucide-react";
 
-export default function DashboardPage() {
+interface PageProps {
+  params: Promise<{ slug?: string[] }>;
+}
+
+export default function DashboardPage({ params }: PageProps) {
+  const { slug } = use(params);
   const { getToken } = useAuth();
   const searchParams = useSearchParams();
+
+  // Extract conversationId from slug: /dashboard/c/{id}
+  const initialConversationId =
+    slug?.[0] === "c" && slug[1] ? slug[1] : null;
 
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
   const [selectedProperty, setSelectedProperty] =
@@ -60,9 +69,43 @@ export default function DashboardPage() {
     }
   }, [searchParams]);
 
+  // Load conversation when navigating directly to /dashboard/c/{id}
+  useEffect(() => {
+    if (!initialConversationId) return;
+    if (currentConversationId === initialConversationId) return;
+
+    async function loadInitialConversation() {
+      try {
+        const token = await getToken();
+        const data = await apiJson<Conversation>(
+          `/api/conversations/${initialConversationId}`,
+          token
+        );
+        setConversationId(initialConversationId!);
+        if (data.messages) {
+          const msgs: Message[] = data.messages
+            .filter((m) => m.role === "user" || m.role === "assistant")
+            .map((m) => ({
+              id: m.id,
+              role: m.role as "user" | "assistant",
+              content: m.content,
+            }));
+          loadMessages(msgs);
+        }
+      } catch (err) {
+        console.error("Failed to load conversation:", err);
+        // Invalid conversation ID - redirect to /dashboard
+        window.history.replaceState({}, "", "/dashboard");
+      }
+    }
+    loadInitialConversation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialConversationId]);
+
   const handleSelectConversation = useCallback(
     async (conv: Conversation) => {
       setConversationId(conv.id);
+      window.history.replaceState({}, "", `/dashboard/c/${conv.id}`);
       try {
         const token = await getToken();
         const data = await apiJson<Conversation>(

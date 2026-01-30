@@ -127,6 +127,12 @@ export function useChat(propertyId: string) {
             } else if (event.type === "done") {
               if (event.conversation_id) {
                 setCurrentConversationId(event.conversation_id);
+                // Update URL seamlessly without reload
+                window.history.replaceState(
+                  {},
+                  "",
+                  `/dashboard/c/${event.conversation_id}`
+                );
               }
               setMessages((prev) =>
                 prev.map((m) =>
@@ -179,6 +185,7 @@ export function useChat(propertyId: string) {
   const clearMessages = useCallback(() => {
     setMessages([]);
     setCurrentConversationId(null);
+    window.history.replaceState({}, "", "/dashboard");
   }, []);
 
   return {
