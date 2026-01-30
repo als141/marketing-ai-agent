@@ -61,6 +61,7 @@ async def get_current_user(
             signing_key.key,
             algorithms=["RS256"],
             options={"verify_aud": False},
+            leeway=10,  # Allow 10 seconds clock skew between Clerk and this server
         )
         clerk_id = payload.get("sub")
         if not clerk_id:
