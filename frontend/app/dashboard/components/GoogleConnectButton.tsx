@@ -35,7 +35,7 @@ export function GoogleConnectButton({
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-6 p-8">
+    <div className="flex flex-col items-center justify-center h-full gap-6 p-5 sm:p-8">
       <div className="w-16 h-16 bg-[#f0f1f5] rounded-2xl flex items-center justify-center">
         <svg className="w-8 h-8" viewBox="0 0 24 24">
           <path

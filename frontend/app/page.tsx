@@ -18,7 +18,7 @@ export default function LandingPage() {
         }}
       />
 
-      <nav className="relative z-10 flex items-center justify-between px-8 py-5 max-w-6xl mx-auto">
+      <nav className="relative z-10 flex items-center justify-between px-4 sm:px-8 py-4 sm:py-5 max-w-6xl mx-auto">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 bg-[#1a1a2e] rounded-md flex items-center justify-center">
             <BarChart3 className="w-4 h-4 text-white" />
@@ -27,10 +27,10 @@ export default function LandingPage() {
             GA4 Agent
           </span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {isSignedIn ? (
             <Link href="/dashboard">
-              <Button className="bg-[#1a1a2e] hover:bg-[#2a2a4e] text-white rounded-lg px-5 h-10 text-sm font-medium">
+              <Button className="bg-[#1a1a2e] hover:bg-[#2a2a4e] text-white rounded-lg px-4 sm:px-5 h-9 sm:h-10 text-xs sm:text-sm font-medium">
                 ダッシュボード
                 <ArrowRight className="w-4 h-4 ml-1.5" />
               </Button>
@@ -40,13 +40,13 @@ export default function LandingPage() {
               <Link href="/sign-in">
                 <Button
                   variant="ghost"
-                  className="text-[#1a1a2e] hover:bg-[#1a1a2e]/5 rounded-lg h-10 text-sm font-medium"
+                  className="text-[#1a1a2e] hover:bg-[#1a1a2e]/5 rounded-lg h-9 sm:h-10 text-xs sm:text-sm font-medium"
                 >
                   ログイン
                 </Button>
               </Link>
               <Link href="/sign-up">
-                <Button className="bg-[#1a1a2e] hover:bg-[#2a2a4e] text-white rounded-lg px-5 h-10 text-sm font-medium">
+                <Button className="bg-[#1a1a2e] hover:bg-[#2a2a4e] text-white rounded-lg px-4 sm:px-5 h-9 sm:h-10 text-xs sm:text-sm font-medium">
                   無料で始める
                 </Button>
               </Link>
@@ -55,14 +55,14 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      <main className="relative z-10 max-w-6xl mx-auto px-8 pt-24 pb-32">
+      <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-8 pt-12 sm:pt-24 pb-16 sm:pb-32">
         <div className="max-w-3xl">
           <div className="inline-flex items-center gap-2 bg-[#e94560]/8 border border-[#e94560]/15 text-[#e94560] rounded-full px-4 py-1.5 text-xs font-medium mb-8 tracking-wide">
             <Zap className="w-3.5 h-3.5" />
             GPT-5.2 + Google Analytics 4
           </div>
 
-          <h1 className="text-5xl leading-tight font-bold text-[#1a1a2e] tracking-tight mb-6">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl leading-tight font-bold text-[#1a1a2e] tracking-tight mb-4 sm:mb-6">
             アナリティクスデータを、
             <br />
             <span className="relative inline-block">
@@ -71,7 +71,7 @@ export default function LandingPage() {
             </span>
           </h1>
 
-          <p className="text-lg text-[#6b7280] leading-relaxed mb-10 max-w-xl">
+          <p className="text-base sm:text-lg text-[#6b7280] leading-relaxed mb-8 sm:mb-10 max-w-xl">
             Google Analytics
             4のデータにAIエージェントが直接アクセス。自然言語でレポート取得、リアルタイムデータ分析、トレンド把握がチャットだけで完結します。
           </p>
@@ -86,7 +86,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-24">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5 mt-12 sm:mt-24">
           {[
             {
               icon: MessageSquare,

@@ -78,7 +78,7 @@ export function PropertySelector({ selectedPropertyId, onSelect }: Props) {
           if (prop) onSelect(prop);
         }}
       >
-        <SelectTrigger className="w-[280px] h-9 text-sm border-[#e5e7eb] bg-white rounded-lg">
+        <SelectTrigger className="w-full max-w-[280px] h-9 text-sm border-[#e5e7eb] bg-white rounded-lg">
           <SelectValue placeholder="プロパティを選択" />
         </SelectTrigger>
         <SelectContent>

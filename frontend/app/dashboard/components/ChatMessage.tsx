@@ -90,7 +90,7 @@ function ToolCallBadges({ toolCalls }: { toolCalls: Message["toolCalls"] }) {
 function UserMessage({ message }: { message: Message }) {
   return (
     <div className="flex justify-end">
-      <div className="flex items-start gap-2.5 max-w-[70%]">
+      <div className="flex items-start gap-2.5 max-w-[85%] sm:max-w-[70%]">
         <div className="bg-[#1a1a2e] text-white rounded-2xl rounded-br-md px-4 py-2.5 text-sm leading-relaxed">
           <p className="whitespace-pre-wrap">{message.content}</p>
         </div>

@@ -42,7 +42,7 @@ function EmptyState({
   ];
 
   return (
-    <div className="flex flex-col items-center justify-center h-full text-center px-8">
+    <div className="flex flex-col items-center justify-center h-full text-center px-4 sm:px-8">
       <div className="w-12 h-12 bg-gradient-to-br from-[#1a1a2e] to-[#2a2a4e] rounded-xl flex items-center justify-center mb-5 shadow-lg shadow-[#1a1a2e]/10">
         <BarChart3 className="w-6 h-6 text-white" />
       </div>
@@ -54,7 +54,7 @@ function EmptyState({
       <p className="text-sm text-[#6b7280] mb-8 max-w-md leading-relaxed">
         GA4とSearch Consoleのデータをもとに分析します。何でも聞いてください。
       </p>
-      <div className="grid grid-cols-2 gap-2.5 max-w-lg w-full">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-lg w-full">
         {suggestions.map((s, i) => {
           const Icon = s.icon;
           return (
@@ -97,7 +97,7 @@ export function ChatWindow({
         {messages.length === 0 ? (
           <EmptyState propertyName={propertyName} onSend={onSend} />
         ) : (
-          <div className="max-w-4xl mx-auto py-6 px-6 space-y-6">
+          <div className="max-w-4xl mx-auto py-4 px-3 sm:py-6 sm:px-6 space-y-6">
             {messages.map((msg) => (
               <ChatMessage key={msg.id} message={msg} />
             ))}

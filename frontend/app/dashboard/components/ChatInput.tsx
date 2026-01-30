@@ -41,8 +41,8 @@ export function ChatInput({ onSend, isStreaming, onStop, disabled }: Props) {
   };
 
   return (
-    <div className="border-t border-[#e5e7eb] bg-white p-4">
-      <div className="flex items-end gap-3 max-w-4xl mx-auto">
+    <div className="border-t border-[#e5e7eb] bg-white p-2.5 sm:p-4">
+      <div className="flex items-end gap-2 sm:gap-3 max-w-4xl mx-auto">
         <Textarea
           ref={textareaRef}
           value={input}
@@ -73,7 +73,7 @@ export function ChatInput({ onSend, isStreaming, onStop, disabled }: Props) {
           </Button>
         )}
       </div>
-      <p className="text-center text-xs text-[#9ca3af] mt-2.5">
+      <p className="hidden sm:block text-center text-xs text-[#9ca3af] mt-2.5">
         Shift+Enter で改行 / Enter で送信
       </p>
     </div>

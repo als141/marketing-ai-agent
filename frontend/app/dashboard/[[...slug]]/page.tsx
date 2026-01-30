@@ -174,7 +174,7 @@ export default function DashboardPage({ params }: PageProps) {
   // Google not connected
   if (!googleConnected) {
     return (
-      <div className="flex items-center justify-center h-screen bg-background">
+      <div className="flex items-center justify-center h-screen bg-background px-4">
         <div className="bg-white border border-[#e5e7eb] rounded-2xl shadow-sm max-w-md w-full overflow-hidden">
           <GoogleConnectButton onConnected={() => setGoogleConnected(true)} />
         </div>
@@ -203,23 +203,23 @@ export default function DashboardPage({ params }: PageProps) {
       {/* Main area */}
       <div className="flex-1 flex flex-col">
         {/* Top bar */}
-        <div className="h-14 border-b border-[#e5e7eb] bg-white flex items-center justify-between px-5">
+        <div className="h-14 border-b border-[#e5e7eb] bg-white flex items-center justify-between pl-14 pr-3 md:px-5">
           <PropertySelector
             selectedPropertyId={selectedProperty?.property_id || null}
             onSelect={setSelectedProperty}
           />
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3 shrink-0 ml-2">
             <button
               onClick={handleReconnectGoogle}
               className="flex items-center gap-1.5 text-xs text-[#6b7280] hover:text-[#1a1a2e] transition-colors cursor-pointer"
               title="Google権限を更新（GSC追加）"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              <span>Google再連携</span>
+              <span className="hidden sm:inline">Google再連携</span>
             </button>
             <div className="flex items-center gap-1.5 text-xs text-[#6b7280]">
               <Wifi className="w-3.5 h-3.5 text-[#10b981]" />
-              <span>MCP接続中</span>
+              <span className="hidden sm:inline">MCP接続中</span>
             </div>
           </div>
         </div>
