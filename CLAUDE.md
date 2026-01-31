@@ -11,6 +11,7 @@
 > 5. **あとで思い出せるように書く**: 技術的な知見を記録する際は、調査元の公式ドキュメントURL・GitHubリポジトリ・SDKソースファイルパスなどの**情報ソース**も一緒に記録する。次のセッションで「なぜこうなっているか」「どこで確認したか」を即座に辿れるようにする
 > 6. **セクションは自由に増減してよい**: 新しいテーマが出てきたらセクションを追加し、不要になったら統合・削除する。このファイルの構造自体を改善し続けること
 > 7. **自己改善**: ユーザーに指摘された間違い・非効率・判断ミスは「自己改善ログ」セクションに記録する。同じ失敗を繰り返さないために、具体的に何が悪かったか・次はどうするかを書く
+> 8. **常時更新の義務**: 新情報の発見、コードリーディング中の新発見、設計変更、UIの変更、技術的知見の獲得、バグの発見と修正など — あらゆる新たな情報や更新が発生した場合は**必ずその場でこのファイルを更新する**。作業の最後にまとめて書くのではなく、発見・変更のたびにリアルタイムで追記・修正すること。これを怠ると次のセッションで同じ調査を繰り返すことになり、非効率である
 
 ## Package Management (STRICT)
 - **Backend (Python)**: `uv add <package>` for dependencies. Never use `pip install`.
@@ -54,9 +55,14 @@ frontend/  - Next.js 16 + React 19 + bun
 ## Design Rules
 - Light mode only
 - Font: Noto Sans JP (Gothic, weights: 300/400/500/700)
-- Colors: Navy (#1a1a2e) text, white/gray background, accent (#e94560)
+- Colors: Navy (#1a1a2e) text, white/gray background (#f8f9fb), accent (#e94560)
 - Component library: shadcn/ui
-- Chat UI: Flat card style (not round bubbles)
+- Chat UI: ChatGPT風デザイン
+  - **入力欄**: カプセル型（rounded-2xl ボーダー内にtextarea+送信ボタンが内包、border-t区切り線なし）
+  - **ユーザーメッセージ**: ライトグレー (#f0f1f5) 背景バブル、右寄せ、アバターなし
+  - **アシスタントメッセージ**: 左寄せフラット表示、ツールバッジ付き
+  - **メッセージ幅**: max-w-3xl (旧: max-w-4xl)
+- Viewport: `viewportFit: "cover"` でノッチ端末対応 (`layout.tsx`で設定済み)
 
 ## Development Commands
 - Backend start: `cd backend && uv run uvicorn main:app --reload`
@@ -121,6 +127,36 @@ frontend/  - Next.js 16 + React 19 + bun
 - MCP servers use stdio transport (MCPServerStdio / MCPServerStdioParams)
 - Supabase uses service_role key (bypasses RLS) on backend
 
+## レスポンシブ対応の知見（重要）
+
+### flexレイアウトのoverflow制御チェーン
+モバイルでテーブルやコードブロックが画面幅を超えてはみ出す問題の根本原因と対策:
+
+**根本原因**: `flex-1`の子要素に`min-w-0`がないと、テーブルの`whitespace-nowrap`セルがコンテナを無限に押し広げる。
+
+**必須の制約チェーン**（どこか1つでも欠けると崩壊する）:
+```
+Dashboard (flex)
+  └─ Main area: flex-1 + min-w-0           ← 幅制約の起点
+      └─ ChatWindow scroll: overflow-x-hidden  ← 横はみ出し遮断
+          └─ Messages div: min-w-0             ← flex子の幅制約
+              └─ .assistant-response: overflow-hidden + min-w-0
+                  └─ .report-content: overflow-hidden + min-w-0
+                      └─ Table wrapper: overflow-x-auto（横スクロール可）
+                          └─ table: min-w-full（w-fullだとダメ）
+```
+
+### テーブルのCSS知見
+- `w-full` → テーブルが親幅に合わせようとして`overflow-x-auto`が無効化される
+- `min-w-full` → テーブルは内容幅まで広がり、親からはスクロールで制御される
+- モバイルでは `word-break: keep-all`（日付 `2026-01-03` が途中で改行されない）
+- `.report-content`の`padding-left`はモバイル(640px以下)で0にして表示領域を最大化
+
+### safe-area対応
+- `layout.tsx`で`viewportFit: "cover"`を設定
+- `globals.css`で`.safe-bottom`クラスを定義（`padding-bottom: env(safe-area-inset-bottom)`）
+- ChatInputの外側divに`.safe-bottom`を適用してノッチ端末でも入力欄が隠れない
+
 ## 自己改善ログ
 
 > ユーザーから指摘された失敗・判断ミス・非効率を記録し、同じ過ちを繰り返さないための学習記録。
@@ -151,3 +187,14 @@ frontend/  - Next.js 16 + React 19 + bun
 - **何をやった**: Google OAuth scope変更（GSC追加）後、再連携の手段をユーザーに説明だけした
 - **何が悪かった**: フロントエンドに再連携UIがなく、ユーザーは実際に操作できなかった
 - **次からどうする**: 機能追加は「ユーザーが実際に操作できる状態」まで完成させる。説明だけで終わらない
+
+### CLAUDE.mdを更新しなかった
+- **何をやった**: レスポンシブ対応で大量のUI変更・技術的発見をしたのにCLAUDE.mdを一切更新しなかった
+- **何が悪かった**: flexのoverflow制御チェーン、ChatGPT風UI変更、safe-area対応など重要な知見が記録されず、次のセッションで同じ調査を繰り返すところだった
+- **ユーザーの指摘**: 「ちなみにあなたの記憶は更新されてますか？？」
+- **次からどうする**: コード変更・新発見・設計変更が発生したら**その場で即座に**CLAUDE.mdを更新する。作業の最後にまとめて書くのではなく、リアルタイムで追記する。運用ルール8番を遵守する
+
+### レスポンシブ対応が浅かった
+- **何をやった**: 最初のレスポンシブ修正でフォントサイズとパディングの調整だけ行った
+- **何が悪かった**: 根本原因（flexの`min-w-0`欠如、`w-full`テーブル問題）を見逃し、表面的なサイズ調整だけした。結果、テーブルが画面外にはみ出したまま
+- **次からどうする**: レスポンシブ対応では「コンテンツが画面幅を超えないこと」を最優先で確認する。まずoverflowの制約チェーン（min-w-0, overflow-hidden）を確保してから、サイズ調整に入る
