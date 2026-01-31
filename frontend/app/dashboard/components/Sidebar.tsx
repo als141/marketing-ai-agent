@@ -10,7 +10,6 @@ import {
   Trash2,
   BarChart3,
   Loader2,
-  Menu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -25,6 +24,8 @@ interface Props {
   onSelectConversation: (conv: Conversation) => void;
   onNewConversation: () => void;
   refreshTrigger?: number;
+  mobileOpen: boolean;
+  onMobileOpenChange: (open: boolean) => void;
 }
 
 function SidebarContent({
@@ -131,10 +132,11 @@ export function Sidebar({
   onSelectConversation,
   onNewConversation,
   refreshTrigger,
+  mobileOpen,
+  onMobileOpenChange,
 }: Props) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [mobileOpen, setMobileOpen] = useState(false);
   const { getToken } = useAuth();
 
   const loadConversations = useCallback(async () => {
@@ -172,12 +174,12 @@ export function Sidebar({
 
   const handleSelectMobile = (conv: Conversation) => {
     onSelectConversation(conv);
-    setMobileOpen(false);
+    onMobileOpenChange(false);
   };
 
   const handleNewMobile = () => {
     onNewConversation();
-    setMobileOpen(false);
+    onMobileOpenChange(false);
   };
 
   const contentProps = {
@@ -189,17 +191,8 @@ export function Sidebar({
 
   return (
     <>
-      {/* Mobile: Hamburger button */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="md:hidden fixed top-3 left-3 z-40 w-10 h-10 flex items-center justify-center bg-white border border-[#e5e7eb] rounded-lg shadow-sm cursor-pointer"
-        aria-label="メニューを開く"
-      >
-        <Menu className="w-5 h-5 text-[#1a1a2e]" />
-      </button>
-
       {/* Mobile: Sheet drawer */}
-      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+      <Sheet open={mobileOpen} onOpenChange={onMobileOpenChange}>
         <SheetContent side="left" showCloseButton className="p-0 w-72 flex flex-col">
           <SheetTitle className="sr-only">ナビゲーション</SheetTitle>
           <SidebarContent
