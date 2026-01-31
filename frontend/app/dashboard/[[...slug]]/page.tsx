@@ -10,7 +10,7 @@ import { GoogleConnectButton } from "../components/GoogleConnectButton";
 import { useChat } from "@/lib/hooks/useChat";
 import { apiJson } from "@/lib/api";
 import type { PropertySummary, Conversation, GoogleAuthStatus, Message } from "@/lib/types";
-import { Loader2, CheckCircle2, Wifi, RefreshCw } from "lucide-react";
+import { Loader2, CheckCircle2, Wifi, RefreshCw, Menu } from "lucide-react";
 
 interface PageProps {
   params: Promise<{ slug?: string[] }>;
@@ -30,6 +30,7 @@ export default function DashboardPage({ params }: PageProps) {
     useState<PropertySummary | null>(null);
   const [refreshSidebar, setRefreshSidebar] = useState(0);
   const [showConnectedBanner, setShowConnectedBanner] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const {
     messages,
@@ -198,13 +199,22 @@ export default function DashboardPage({ params }: PageProps) {
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
         refreshTrigger={refreshSidebar}
+        mobileOpen={sidebarOpen}
+        onMobileOpenChange={setSidebarOpen}
       />
 
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
-        <div className="h-12 border-b border-[#e5e7eb] bg-white flex items-center justify-between pl-13 pr-3 md:pl-5 md:pr-5">
-          <div className="flex-1 min-w-0">
+        <div className="h-12 border-b border-[#e5e7eb] bg-white flex items-center justify-between px-2 md:px-5">
+          <div className="flex items-center gap-1 flex-1 min-w-0">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="md:hidden shrink-0 w-9 h-9 flex items-center justify-center rounded-lg hover:bg-[#f0f1f5] transition-colors cursor-pointer"
+              aria-label="メニューを開く"
+            >
+              <Menu className="w-5 h-5 text-[#1a1a2e]" />
+            </button>
             <PropertySelector
               selectedPropertyId={selectedProperty?.property_id || null}
               onSelect={setSelectedProperty}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Send, Square } from "lucide-react";
 
 interface Props {
@@ -13,6 +13,32 @@ interface Props {
 export function ChatInput({ onSend, isStreaming, onStop, disabled }: Props) {
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Handle mobile keyboard: adjust position using visualViewport API
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const handleResize = () => {
+      if (!containerRef.current) return;
+      // Calculate how much the keyboard is covering
+      // visualViewport.height shrinks when keyboard is open
+      const keyboardOffset = window.innerHeight - vv.height - vv.offsetTop;
+      if (keyboardOffset > 0) {
+        containerRef.current.style.paddingBottom = `${keyboardOffset}px`;
+      } else {
+        containerRef.current.style.paddingBottom = "";
+      }
+    };
+
+    vv.addEventListener("resize", handleResize);
+    vv.addEventListener("scroll", handleResize);
+    return () => {
+      vv.removeEventListener("resize", handleResize);
+      vv.removeEventListener("scroll", handleResize);
+    };
+  }, []);
 
   const handleSubmit = useCallback(() => {
     const trimmed = input.trim();
@@ -39,7 +65,7 @@ export function ChatInput({ onSend, isStreaming, onStop, disabled }: Props) {
   };
 
   return (
-    <div className="px-3 sm:px-6 pb-3 sm:pb-5 pt-2 bg-background safe-bottom">
+    <div ref={containerRef} className="px-3 sm:px-6 pb-3 sm:pb-5 pt-2 bg-background safe-bottom">
       <div className="max-w-3xl mx-auto">
         <div className="flex items-end gap-0 bg-white border border-[#d1d5db] rounded-2xl shadow-sm focus-within:border-[#9ca3af] focus-within:shadow-md transition-all">
           <textarea

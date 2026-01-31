@@ -157,6 +157,18 @@ Dashboard (flex)
 - `globals.css`で`.safe-bottom`クラスを定義（`padding-bottom: env(safe-area-inset-bottom)`）
 - ChatInputの外側divに`.safe-bottom`を適用してノッチ端末でも入力欄が隠れない
 
+### モバイルキーボード対応
+- `visualViewport` APIを使ってキーボードの高さを検知
+- `window.innerHeight - visualViewport.height - visualViewport.offsetTop` でキーボードオフセットを計算
+- ChatInputのコンテナに`paddingBottom`を動的に設定してキーボードの上に入力欄を表示
+- `resize`と`scroll`両方のイベントをリッスンする（iOSとAndroidで挙動が異なるため）
+
+### ハンバーガーメニューの配置
+- `fixed`で浮遊させるのはNG（トップバーの要素と重なる）
+- トップバー内に`md:hidden`で内包し、PropertySelectorの左に配置する
+- Sidebarコンポーネントは`mobileOpen`/`onMobileOpenChange`をpropsで受け取り、DashboardPageが状態管理する
+- Dashboard layoutは`h-dvh`でブラウザUIバー分を考慮した高さを使用
+
 ## 自己改善ログ
 
 > ユーザーから指摘された失敗・判断ミス・非効率を記録し、同じ過ちを繰り返さないための学習記録。
