@@ -55,30 +55,30 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-8 pt-12 sm:pt-24 pb-16 sm:pb-32">
+      <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-8 pt-10 sm:pt-24 pb-12 sm:pb-32">
         <div className="max-w-3xl">
-          <div className="inline-flex items-center gap-2 bg-[#e94560]/8 border border-[#e94560]/15 text-[#e94560] rounded-full px-4 py-1.5 text-xs font-medium mb-8 tracking-wide">
-            <Zap className="w-3.5 h-3.5" />
+          <div className="inline-flex items-center gap-1.5 sm:gap-2 bg-[#e94560]/8 border border-[#e94560]/15 text-[#e94560] rounded-full px-3 sm:px-4 py-1.5 text-[11px] sm:text-xs font-medium mb-6 sm:mb-8 tracking-wide">
+            <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
             GPT-5.2 + Google Analytics 4
           </div>
 
-          <h1 className="text-3xl sm:text-4xl md:text-5xl leading-tight font-bold text-[#1a1a2e] tracking-tight mb-4 sm:mb-6">
+          <h1 className="text-[1.625rem] sm:text-4xl md:text-5xl leading-tight font-bold text-[#1a1a2e] tracking-tight mb-3 sm:mb-6">
             アナリティクスデータを、
             <br />
             <span className="relative inline-block">
               会話で分析する
-              <span className="absolute bottom-1 left-0 w-full h-2.5 bg-[#e94560]/15 -z-10" />
+              <span className="absolute bottom-0.5 sm:bottom-1 left-0 w-full h-2 sm:h-2.5 bg-[#e94560]/15 -z-10" />
             </span>
           </h1>
 
-          <p className="text-base sm:text-lg text-[#6b7280] leading-relaxed mb-8 sm:mb-10 max-w-xl">
+          <p className="text-sm sm:text-lg text-[#6b7280] leading-relaxed mb-6 sm:mb-10 max-w-xl">
             Google Analytics
             4のデータにAIエージェントが直接アクセス。自然言語でレポート取得、リアルタイムデータ分析、トレンド把握がチャットだけで完結します。
           </p>
 
           <div className="flex items-center gap-4">
-            <Link href={isSignedIn ? "/dashboard" : "/sign-up"}>
-              <Button className="bg-[#e94560] hover:bg-[#d63850] text-white rounded-lg px-7 h-12 text-sm font-medium shadow-lg shadow-[#e94560]/20 cursor-pointer">
+            <Link href={isSignedIn ? "/dashboard" : "/sign-up"} className="w-full sm:w-auto">
+              <Button className="w-full sm:w-auto bg-[#e94560] hover:bg-[#d63850] text-white rounded-lg px-7 h-11 sm:h-12 text-sm font-medium shadow-lg shadow-[#e94560]/20 cursor-pointer">
                 今すぐ始める
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
@@ -86,7 +86,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5 mt-12 sm:mt-24">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-5 mt-10 sm:mt-24">
           {[
             {
               icon: MessageSquare,
@@ -106,7 +106,7 @@ export default function LandingPage() {
           ].map((feature, i) => (
             <div
               key={i}
-              className="group p-6 bg-white border border-[#e5e7eb] rounded-xl hover:border-[#1a1a2e]/20 transition-all duration-300 hover:shadow-sm"
+              className="group p-4 sm:p-6 bg-white border border-[#e5e7eb] rounded-xl hover:border-[#1a1a2e]/20 transition-all duration-300 hover:shadow-sm"
             >
               <div className="w-10 h-10 bg-[#f0f1f5] rounded-lg flex items-center justify-center mb-4 group-hover:bg-[#1a1a2e] transition-colors duration-300">
                 <feature.icon className="w-5 h-5 text-[#1a1a2e] group-hover:text-white transition-colors duration-300" />

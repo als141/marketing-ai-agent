@@ -41,16 +41,16 @@ export function ChatInput({ onSend, isStreaming, onStop, disabled }: Props) {
   };
 
   return (
-    <div className="border-t border-[#e5e7eb] bg-white p-2.5 sm:p-4">
+    <div className="border-t border-[#e5e7eb] bg-white p-2 sm:p-4 safe-bottom">
       <div className="flex items-end gap-2 sm:gap-3 max-w-4xl mx-auto">
         <Textarea
           ref={textareaRef}
           value={input}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
-          placeholder="GA4データについて質問してください..."
+          placeholder="GA4データについて質問..."
           disabled={disabled}
-          className="min-h-[44px] max-h-[160px] resize-none border-[#e5e7eb] bg-[#f8f9fb] rounded-xl text-sm leading-relaxed placeholder:text-[#9ca3af] focus-visible:ring-[#1a1a2e] focus-visible:ring-1 focus-visible:ring-offset-0"
+          className="min-h-[42px] sm:min-h-[44px] max-h-[120px] sm:max-h-[160px] resize-none border-[#e5e7eb] bg-[#f8f9fb] rounded-xl text-[13px] sm:text-sm leading-relaxed placeholder:text-[#9ca3af] focus-visible:ring-[#1a1a2e] focus-visible:ring-1 focus-visible:ring-offset-0"
           rows={1}
         />
         {isStreaming ? (
@@ -58,7 +58,7 @@ export function ChatInput({ onSend, isStreaming, onStop, disabled }: Props) {
             onClick={onStop}
             variant="outline"
             size="icon"
-            className="shrink-0 w-11 h-11 rounded-xl border-[#e5e7eb] hover:bg-[#f0f1f5] cursor-pointer"
+            className="shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-xl border-[#e5e7eb] hover:bg-[#f0f1f5] cursor-pointer"
           >
             <Square className="w-4 h-4 text-[#e94560]" />
           </Button>
@@ -67,7 +67,7 @@ export function ChatInput({ onSend, isStreaming, onStop, disabled }: Props) {
             onClick={handleSubmit}
             disabled={!input.trim() || disabled}
             size="icon"
-            className="shrink-0 w-11 h-11 rounded-xl bg-[#1a1a2e] hover:bg-[#2a2a4e] disabled:opacity-30 cursor-pointer"
+            className="shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-[#1a1a2e] hover:bg-[#2a2a4e] disabled:opacity-30 cursor-pointer"
           >
             <Send className="w-4 h-4 text-white" />
           </Button>

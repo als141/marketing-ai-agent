@@ -35,9 +35,9 @@ export function GoogleConnectButton({
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-6 p-5 sm:p-8">
-      <div className="w-16 h-16 bg-[#f0f1f5] rounded-2xl flex items-center justify-center">
-        <svg className="w-8 h-8" viewBox="0 0 24 24">
+    <div className="flex flex-col items-center justify-center h-full gap-5 sm:gap-6 p-4 sm:p-8">
+      <div className="w-14 h-14 sm:w-16 sm:h-16 bg-[#f0f1f5] rounded-2xl flex items-center justify-center">
+        <svg className="w-7 h-7 sm:w-8 sm:h-8" viewBox="0 0 24 24">
           <path
             d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
             fill="#4285F4"
@@ -56,18 +56,18 @@ export function GoogleConnectButton({
           />
         </svg>
       </div>
-      <div className="text-center space-y-2">
-        <h3 className="text-lg font-bold text-[#1a1a2e]">
+      <div className="text-center space-y-1.5 sm:space-y-2">
+        <h3 className="text-base sm:text-lg font-bold text-[#1a1a2e]">
           Googleアカウントを連携
         </h3>
-        <p className="text-sm text-[#6b7280] max-w-sm leading-relaxed">
+        <p className="text-xs sm:text-sm text-[#6b7280] max-w-sm leading-relaxed">
           Google Analytics 4とSearch Consoleのデータにアクセスするため、Googleアカウントとの連携が必要です。
         </p>
       </div>
       <Button
         onClick={handleConnect}
         disabled={loading}
-        className="bg-[#1a1a2e] hover:bg-[#2a2a4e] text-white rounded-lg px-6 h-11 text-sm font-medium cursor-pointer"
+        className="w-full sm:w-auto bg-[#1a1a2e] hover:bg-[#2a2a4e] text-white rounded-lg px-6 h-11 text-sm font-medium cursor-pointer"
       >
         {loading ? (
           <>

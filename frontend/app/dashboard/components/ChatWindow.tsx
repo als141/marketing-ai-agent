@@ -43,25 +43,25 @@ function EmptyState({
 
   return (
     <div className="flex flex-col items-center justify-center h-full text-center px-4 sm:px-8">
-      <div className="w-12 h-12 bg-gradient-to-br from-[#1a1a2e] to-[#2a2a4e] rounded-xl flex items-center justify-center mb-5 shadow-lg shadow-[#1a1a2e]/10">
-        <BarChart3 className="w-6 h-6 text-white" />
+      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-[#1a1a2e] to-[#2a2a4e] rounded-xl flex items-center justify-center mb-4 sm:mb-5 shadow-lg shadow-[#1a1a2e]/10">
+        <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
       </div>
-      <h2 className="text-lg font-bold text-[#1a1a2e] mb-1.5 tracking-tight">
+      <h2 className="text-base sm:text-lg font-bold text-[#1a1a2e] mb-1 sm:mb-1.5 tracking-tight">
         {propertyName
           ? `${propertyName}`
           : "GA4 & Search Console 分析"}
       </h2>
-      <p className="text-sm text-[#6b7280] mb-8 max-w-md leading-relaxed">
+      <p className="text-xs sm:text-sm text-[#6b7280] mb-6 sm:mb-8 max-w-md leading-relaxed">
         GA4とSearch Consoleのデータをもとに分析します。何でも聞いてください。
       </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-lg w-full">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 max-w-lg w-full">
         {suggestions.map((s, i) => {
           const Icon = s.icon;
           return (
             <button
               key={i}
               onClick={() => onSend(s.text)}
-              className="group text-left px-3.5 py-3 bg-white border border-[#e5e7eb] rounded-xl text-xs text-[#374151] hover:border-[#1a1a2e]/20 hover:shadow-sm transition-all duration-200 cursor-pointer leading-relaxed flex items-start gap-2.5"
+              className="group text-left px-3 sm:px-3.5 py-2.5 sm:py-3 bg-white border border-[#e5e7eb] rounded-xl text-xs text-[#374151] hover:border-[#1a1a2e]/20 hover:shadow-sm transition-all duration-200 cursor-pointer leading-relaxed flex items-start gap-2 sm:gap-2.5"
             >
               <Icon className="w-3.5 h-3.5 text-[#9ca3af] group-hover:text-[#e94560] transition-colors mt-0.5 shrink-0" />
               <span>{s.text}</span>

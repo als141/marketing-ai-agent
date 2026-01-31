@@ -116,6 +116,35 @@
   background-color: #fafbfc;
 }
 
+/* ── Mobile-friendly tables ── */
+.report-content table {
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 640px) {
+  .report-content table {
+    font-size: 0.75rem;
+  }
+  .report-content table th,
+  .report-content table td {
+    padding: 0.5rem 0.625rem;
+  }
+  /* Allow long text in table cells to wrap on mobile */
+  .report-content table td:first-child,
+  .report-content table th:first-child {
+    white-space: normal;
+    word-break: break-all;
+    min-width: 80px;
+  }
+}
+
+/* ── Mobile-friendly code blocks ── */
+@media (max-width: 640px) {
+  .report-content pre {
+    font-size: 0.6875rem;
+  }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
@@ -129,4 +158,11 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
+}
+
+/* ── Safe area for mobile devices with notch ── */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }
