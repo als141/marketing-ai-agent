@@ -89,10 +89,10 @@ function ToolCallBadges({ toolCalls }: { toolCalls: Message["toolCalls"] }) {
 
 function UserMessage({ message }: { message: Message }) {
   return (
-    <div className="flex justify-end">
-      <div className="flex items-start gap-2 sm:gap-2.5 max-w-[90%] sm:max-w-[70%]">
-        <div className="bg-[#1a1a2e] text-white rounded-2xl rounded-br-md px-3 sm:px-4 py-2 sm:py-2.5 text-[13px] sm:text-sm leading-relaxed">
-          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+    <div className="flex justify-end overflow-hidden">
+      <div className="flex items-start gap-2 sm:gap-2.5 max-w-[85%] sm:max-w-[70%] min-w-0">
+        <div className="bg-[#1a1a2e] text-white rounded-2xl rounded-br-md px-3 sm:px-4 py-2 sm:py-2.5 text-[13px] sm:text-sm leading-relaxed min-w-0">
+          <p className="whitespace-pre-wrap break-words overflow-hidden">{message.content}</p>
         </div>
         <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#1a1a2e] flex items-center justify-center shrink-0 mt-0.5">
           <User className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
@@ -104,10 +104,10 @@ function UserMessage({ message }: { message: Message }) {
 
 function AssistantMessage({ message }: { message: Message }) {
   return (
-    <div className="assistant-response">
+    <div className="assistant-response overflow-hidden min-w-0">
       <ToolCallBadges toolCalls={message.toolCalls} />
 
-      <div className="report-content">
+      <div className="report-content overflow-hidden min-w-0">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeRaw]}
@@ -153,8 +153,8 @@ function AssistantMessage({ message }: { message: Message }) {
             ),
             table: ({ children }) => (
               <div className="my-3 sm:my-4 rounded-lg border border-[#e5e7eb] overflow-hidden shadow-sm">
-                <div className="overflow-x-auto -webkit-overflow-scrolling-touch">
-                  <table className="w-full text-xs sm:text-sm">{children}</table>
+                <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
+                  <table className="min-w-full text-xs sm:text-sm">{children}</table>
                 </div>
               </div>
             ),
