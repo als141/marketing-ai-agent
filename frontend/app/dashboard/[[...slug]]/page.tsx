@@ -201,7 +201,7 @@ export default function DashboardPage({ params }: PageProps) {
       />
 
       {/* Main area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
         <div className="h-14 border-b border-[#e5e7eb] bg-white flex items-center justify-between pl-12 pr-2 md:px-5">
           <div className="flex-1 min-w-0">

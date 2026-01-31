@@ -93,11 +93,11 @@ export function ChatWindow({
   return (
     <div className="flex flex-col h-full">
       {/* Messages area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden">
         {messages.length === 0 ? (
           <EmptyState propertyName={propertyName} onSend={onSend} />
         ) : (
-          <div className="max-w-4xl mx-auto py-4 px-3 sm:py-6 sm:px-6 space-y-6">
+          <div className="max-w-4xl mx-auto py-4 px-3 sm:py-6 sm:px-6 space-y-6 min-w-0">
             {messages.map((msg) => (
               <ChatMessage key={msg.id} message={msg} />
             ))}
