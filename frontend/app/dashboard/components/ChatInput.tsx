@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
 import { Send, Square } from "lucide-react";
 
 interface Props {
@@ -37,45 +35,46 @@ export function ChatInput({ onSend, isStreaming, onStop, disabled }: Props) {
     setInput(e.target.value);
     const el = e.target;
     el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 160) + "px";
+    el.style.height = Math.min(el.scrollHeight, 150) + "px";
   };
 
   return (
-    <div className="border-t border-[#e5e7eb] bg-white p-2 sm:p-4 safe-bottom">
-      <div className="flex items-end gap-2 sm:gap-3 max-w-4xl mx-auto">
-        <Textarea
-          ref={textareaRef}
-          value={input}
-          onChange={handleInput}
-          onKeyDown={handleKeyDown}
-          placeholder="GA4データについて質問..."
-          disabled={disabled}
-          className="min-h-[42px] sm:min-h-[44px] max-h-[120px] sm:max-h-[160px] resize-none border-[#e5e7eb] bg-[#f8f9fb] rounded-xl text-[13px] sm:text-sm leading-relaxed placeholder:text-[#9ca3af] focus-visible:ring-[#1a1a2e] focus-visible:ring-1 focus-visible:ring-offset-0"
-          rows={1}
-        />
-        {isStreaming ? (
-          <Button
-            onClick={onStop}
-            variant="outline"
-            size="icon"
-            className="shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-xl border-[#e5e7eb] hover:bg-[#f0f1f5] cursor-pointer"
-          >
-            <Square className="w-4 h-4 text-[#e94560]" />
-          </Button>
-        ) : (
-          <Button
-            onClick={handleSubmit}
-            disabled={!input.trim() || disabled}
-            size="icon"
-            className="shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-[#1a1a2e] hover:bg-[#2a2a4e] disabled:opacity-30 cursor-pointer"
-          >
-            <Send className="w-4 h-4 text-white" />
-          </Button>
-        )}
+    <div className="px-3 sm:px-6 pb-3 sm:pb-5 pt-2 bg-background safe-bottom">
+      <div className="max-w-3xl mx-auto">
+        <div className="flex items-end gap-0 bg-white border border-[#d1d5db] rounded-2xl shadow-sm focus-within:border-[#9ca3af] focus-within:shadow-md transition-all">
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={handleInput}
+            onKeyDown={handleKeyDown}
+            placeholder="GA4データについて質問..."
+            disabled={disabled}
+            rows={1}
+            className="flex-1 min-h-[44px] max-h-[150px] resize-none bg-transparent px-4 py-3 text-[14px] sm:text-sm leading-relaxed placeholder:text-[#9ca3af] text-[#1a1a2e] outline-none disabled:opacity-40 disabled:cursor-not-allowed"
+          />
+          {isStreaming ? (
+            <button
+              onClick={onStop}
+              className="shrink-0 w-9 h-9 m-1.5 rounded-xl flex items-center justify-center bg-[#f0f1f5] hover:bg-[#e5e7eb] transition-colors cursor-pointer"
+              aria-label="停止"
+            >
+              <Square className="w-4 h-4 text-[#e94560]" />
+            </button>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              disabled={!input.trim() || disabled}
+              className="shrink-0 w-9 h-9 m-1.5 rounded-xl flex items-center justify-center bg-[#1a1a2e] hover:bg-[#2a2a4e] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              aria-label="送信"
+            >
+              <Send className="w-4 h-4 text-white" />
+            </button>
+          )}
+        </div>
+        <p className="hidden sm:block text-center text-[11px] text-[#9ca3af] mt-2">
+          Shift+Enter で改行 / Enter で送信
+        </p>
       </div>
-      <p className="hidden sm:block text-center text-xs text-[#9ca3af] mt-2.5">
-        Shift+Enter で改行 / Enter で送信
-      </p>
     </div>
   );
 }

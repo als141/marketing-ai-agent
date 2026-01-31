@@ -203,25 +203,25 @@ export default function DashboardPage({ params }: PageProps) {
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
-        <div className="h-14 border-b border-[#e5e7eb] bg-white flex items-center justify-between pl-12 pr-2 md:px-5">
+        <div className="h-12 border-b border-[#e5e7eb] bg-white flex items-center justify-between pl-13 pr-3 md:pl-5 md:pr-5">
           <div className="flex-1 min-w-0">
             <PropertySelector
               selectedPropertyId={selectedProperty?.property_id || null}
               onSelect={setSelectedProperty}
             />
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 ml-1 sm:ml-2">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0 ml-1">
             <button
               onClick={handleReconnectGoogle}
-              className="flex items-center gap-1 sm:gap-1.5 text-xs text-[#6b7280] hover:text-[#1a1a2e] transition-colors cursor-pointer p-1.5"
+              className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs text-[#9ca3af] hover:text-[#1a1a2e] transition-colors cursor-pointer p-1"
               title="Google権限を更新（GSC追加）"
             >
               <RefreshCw className="w-3.5 h-3.5 shrink-0" />
-              <span className="hidden sm:inline">Google再連携</span>
+              <span className="hidden sm:inline">再連携</span>
             </button>
-            <div className="flex items-center gap-1 sm:gap-1.5 text-xs text-[#6b7280]">
-              <Wifi className="w-3.5 h-3.5 text-[#10b981] shrink-0" />
-              <span className="hidden sm:inline">MCP接続中</span>
+            <div className="flex items-center gap-1 text-[11px] sm:text-xs text-[#9ca3af]">
+              <Wifi className="w-3 h-3 text-[#10b981] shrink-0" />
+              <span className="hidden sm:inline">接続中</span>
             </div>
           </div>
         </div>

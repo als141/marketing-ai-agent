@@ -54,7 +54,7 @@ function EmptyState({
       <p className="text-xs sm:text-sm text-[#6b7280] mb-6 sm:mb-8 max-w-md leading-relaxed">
         GA4とSearch Consoleのデータをもとに分析します。何でも聞いてください。
       </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 max-w-lg w-full">
+      <div className="grid grid-cols-2 gap-2 sm:gap-2.5 max-w-md w-full">
         {suggestions.map((s, i) => {
           const Icon = s.icon;
           return (
@@ -97,7 +97,7 @@ export function ChatWindow({
         {messages.length === 0 ? (
           <EmptyState propertyName={propertyName} onSend={onSend} />
         ) : (
-          <div className="max-w-4xl mx-auto py-4 px-3 sm:py-6 sm:px-6 space-y-6 min-w-0">
+          <div className="max-w-3xl mx-auto py-4 sm:py-6 px-4 sm:px-6 space-y-5 sm:space-y-6 min-w-0">
             {messages.map((msg) => (
               <ChatMessage key={msg.id} message={msg} />
             ))}
