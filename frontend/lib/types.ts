@@ -83,11 +83,19 @@ export interface ChartActivityItem {
   spec: ChartSpec;
 }
 
+export interface TextActivityItem {
+  id: string;
+  kind: "text";
+  sequence: number;
+  content: string;
+}
+
 export type ActivityItem =
   | ReasoningActivityItem
   | ToolActivityItem
   | AskUserActivityItem
-  | ChartActivityItem;
+  | ChartActivityItem
+  | TextActivityItem;
 
 // --- Message ---
 

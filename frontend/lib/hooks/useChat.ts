@@ -7,6 +7,7 @@ import type {
   ToolCall,
   StreamEvent,
   ToolActivityItem,
+  TextActivityItem,
   AskUserActivityItem,
   ChartActivityItem,
   PendingQuestionGroup,
@@ -26,6 +27,7 @@ export function useChat(propertyId: string) {
   const abortRef = useRef<AbortController | null>(null);
   const seqRef = useRef(0);
   const assistantIdRef = useRef<string | null>(null);
+  const currentTextItemIdRef = useRef<string | null>(null);
 
   const loadMessages = useCallback((msgs: Message[]) => {
     setMessages(msgs);
@@ -77,6 +79,7 @@ export function useChat(propertyId: string) {
   const sendMessage = useCallback(
     async (content: string) => {
       seqRef.current = 0;
+      currentTextItemIdRef.current = null;
 
       const userMsg: Message = {
         id: crypto.randomUUID(),
@@ -145,14 +148,56 @@ export function useChat(propertyId: string) {
             }
 
             if (event.type === "text_delta" && event.content) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId
-                    ? { ...m, content: m.content + event.content }
-                    : m
-                )
-              );
+              // Create a new text segment if none exists
+              if (!currentTextItemIdRef.current) {
+                const textId = crypto.randomUUID();
+                const seq = ++seqRef.current;
+                currentTextItemIdRef.current = textId;
+                const newTextItem: TextActivityItem = {
+                  id: textId,
+                  kind: "text",
+                  sequence: seq,
+                  content: event.content,
+                };
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantId
+                      ? {
+                          ...m,
+                          content: m.content + event.content,
+                          activityItems: [
+                            ...(m.activityItems || []),
+                            newTextItem,
+                          ],
+                        }
+                      : m
+                  )
+                );
+              } else {
+                // Append to existing text segment
+                const textId = currentTextItemIdRef.current;
+                setMessages((prev) =>
+                  prev.map((m) => {
+                    if (m.id !== assistantId) return m;
+                    const items = (m.activityItems || []).map((it) =>
+                      it.id === textId
+                        ? { ...it, content: (it as TextActivityItem).content + event.content } as TextActivityItem
+                        : it
+                    );
+                    return {
+                      ...m,
+                      content: m.content + event.content,
+                      activityItems: items,
+                    };
+                  })
+                );
+              }
+            } else if (event.type === "response_created") {
+              // New model turn — reset text segment so next text_delta starts a new one
+              currentTextItemIdRef.current = null;
             } else if (event.type === "tool_call") {
+              // Tool call breaks the text segment
+              currentTextItemIdRef.current = null;
               const seq = ++seqRef.current;
               const tc: ToolCall = {
                 type: "call",
@@ -222,6 +267,7 @@ export function useChat(propertyId: string) {
                 })
               );
             } else if (event.type === "reasoning" && event.content) {
+              currentTextItemIdRef.current = null;
               const seq = ++seqRef.current;
               setMessages((prev) =>
                 prev.map((m) =>
@@ -246,6 +292,7 @@ export function useChat(propertyId: string) {
                 )
               );
             } else if (event.type === "ask_user" && event.group_id && event.questions) {
+              currentTextItemIdRef.current = null;
               const seq = ++seqRef.current;
               const askItem: AskUserActivityItem = {
                 id: crypto.randomUUID(),
@@ -272,6 +319,7 @@ export function useChat(propertyId: string) {
                 questions: event.questions,
               });
             } else if (event.type === "chart" && event.spec) {
+              currentTextItemIdRef.current = null;
               const seq = ++seqRef.current;
               const chartItem: ChartActivityItem = {
                 id: crypto.randomUUID(),
@@ -293,6 +341,7 @@ export function useChat(propertyId: string) {
                 )
               );
             } else if (event.type === "done") {
+              currentTextItemIdRef.current = null;
               if (event.conversation_id) {
                 setCurrentConversationId(event.conversation_id);
                 window.history.replaceState(

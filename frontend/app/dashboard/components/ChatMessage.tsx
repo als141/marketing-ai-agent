@@ -3,10 +3,12 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
+import type { Components } from "react-markdown";
 import type {
   Message,
   ActivityItem,
   ToolActivityItem,
+  TextActivityItem,
   AskUserActivityItem,
   ChartActivityItem,
   PendingQuestionGroup,
@@ -69,11 +71,144 @@ const TOOL_LABELS: Record<string, string> = {
 };
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Shared markdown components (used by both text segments and legacy content)
 // ---------------------------------------------------------------------------
 
+const markdownComponents: Components = {
+  h1: ({ children }) => (
+    <h1 className="text-lg sm:text-xl font-bold text-[#1a1a2e] mt-6 sm:mt-8 mb-2 sm:mb-3 pb-2 border-b-2 border-[#e94560]/20 first:mt-0">
+      {children}
+    </h1>
+  ),
+  h2: ({ children }) => (
+    <h2 className="text-sm sm:text-base font-bold text-[#1a1a2e] mt-5 sm:mt-6 mb-2 sm:mb-2.5 flex items-center gap-2 first:mt-0">
+      <span className="w-1 h-4 sm:h-5 bg-[#e94560] rounded-full inline-block shrink-0" />
+      {children}
+    </h2>
+  ),
+  h3: ({ children }) => (
+    <h3 className="text-[13px] sm:text-sm font-bold text-[#374151] mt-3 sm:mt-4 mb-1.5 sm:mb-2 first:mt-0">
+      {children}
+    </h3>
+  ),
+  p: ({ children }) => (
+    <p className="text-[13px] sm:text-sm text-[#374151] leading-[1.8] mb-2.5 sm:mb-3 last:mb-0 break-words">
+      {children}
+    </p>
+  ),
+  strong: ({ children }) => (
+    <strong className="font-bold text-[#1a1a2e]">{children}</strong>
+  ),
+  em: ({ children }) => (
+    <em className="text-[#6b7280] not-italic text-[11px] sm:text-xs">{children}</em>
+  ),
+  ul: ({ children }) => (
+    <ul className="space-y-1 mb-2.5 sm:mb-3 pl-0 list-none">{children}</ul>
+  ),
+  ol: ({ children }) => (
+    <ol className="space-y-1 mb-2.5 sm:mb-3 pl-0 list-none counter-reset-item">{children}</ol>
+  ),
+  li: ({ children }) => (
+    <li className="text-[13px] sm:text-sm text-[#374151] leading-relaxed flex items-start gap-1.5 sm:gap-2">
+      <span className="text-[#e94560] mt-1.5 shrink-0 text-[8px]">&#9679;</span>
+      <span className="min-w-0 break-words">{children}</span>
+    </li>
+  ),
+  table: ({ children }) => (
+    <div className="my-3 sm:my-4 rounded-lg border border-[#e5e7eb] overflow-hidden shadow-sm">
+      <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
+        <table className="min-w-full text-xs sm:text-sm">{children}</table>
+      </div>
+    </div>
+  ),
+  thead: ({ children }) => (
+    <thead className="bg-[#f8f9fb]">{children}</thead>
+  ),
+  th: ({ children }) => (
+    <th className="px-2 sm:px-3.5 py-2 sm:py-2.5 text-left text-[11px] sm:text-xs font-bold text-[#1a1a2e] uppercase tracking-wider border-b border-[#e5e7eb] whitespace-nowrap">
+      {children}
+    </th>
+  ),
+  td: ({ children }) => (
+    <td className="px-2 sm:px-3.5 py-2 sm:py-2.5 text-xs sm:text-sm text-[#374151] border-b border-[#f0f1f5] tabular-nums whitespace-nowrap">
+      {children}
+    </td>
+  ),
+  tr: ({ children, ...props }) => {
+    const isInBody = !props.node?.position || true;
+    return (
+      <tr className={isInBody ? "hover:bg-[#f8f9fb]/60 transition-colors" : ""}>
+        {children}
+      </tr>
+    );
+  },
+  code: ({ children, className }) => {
+    const isBlock = className?.includes("language-");
+    if (isBlock) {
+      return (
+        <div className="my-2.5 sm:my-3 rounded-lg bg-[#1a1a2e] overflow-hidden">
+          <div className="px-3 sm:px-4 py-1.5 bg-[#2a2a4e] text-[10px] text-[#9ca3af] uppercase tracking-wider font-medium">
+            {className?.replace("language-", "") || "code"}
+          </div>
+          <pre className="px-3 sm:px-4 py-2.5 sm:py-3 overflow-x-auto text-[11px] sm:text-xs leading-relaxed">
+            <code className="text-[#e5e7eb]">{children}</code>
+          </pre>
+        </div>
+      );
+    }
+    return (
+      <code className="text-[#e94560] bg-[#fef2f2] px-1 sm:px-1.5 py-0.5 rounded text-[11px] sm:text-xs font-medium break-all">
+        {children}
+      </code>
+    );
+  },
+  pre: ({ children }) => <>{children}</>,
+  blockquote: ({ children }) => (
+    <blockquote className="my-2.5 sm:my-3 pl-3 sm:pl-4 border-l-3 border-[#e94560]/30 text-[#6b7280]">
+      {children}
+    </blockquote>
+  ),
+  hr: () => <hr className="my-4 sm:my-5 border-t border-[#e5e7eb]" />,
+  a: ({ children, href }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-[#3b82f6] underline underline-offset-2 hover:text-[#2563eb] transition-colors break-all"
+    >
+      {children}
+    </a>
+  ),
+};
+
+// ---------------------------------------------------------------------------
+// Helpers: grouping for interleaved timeline
+// ---------------------------------------------------------------------------
+
+/** A section in the completed view: "activity" (reasoning/tools, collapsible) or "content" (text/chart/ask_user, visible) */
+interface TimelineSection {
+  type: "activity" | "content";
+  items: ActivityItem[];
+}
+
+function groupIntoSections(items: ActivityItem[]): TimelineSection[] {
+  const sections: TimelineSection[] = [];
+  for (const item of items) {
+    const isActivity = item.kind === "reasoning" || item.kind === "tool";
+    const sectionType = isActivity ? "activity" : "content";
+    const last = sections[sections.length - 1];
+    if (last && last.type === sectionType) {
+      last.items.push(item);
+    } else {
+      sections.push({ type: sectionType, items: [item] });
+    }
+  }
+  return sections;
+}
+
+/** Group consecutive items of the same kind (for rendering within a section) */
 interface ItemGroup {
-  kind: "reasoning" | "tool" | "ask_user" | "chart";
+  kind: ActivityItem["kind"];
   items: ActivityItem[];
 }
 
@@ -137,17 +272,78 @@ function ReasoningLine({ content }: { content: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// TimelineContent — renders the interleaved item groups
+// TextSegment — renders a markdown text block in the timeline
 // ---------------------------------------------------------------------------
 
-function TimelineContent({
+function TextSegment({ content, isLast, isStreaming }: { content: string; isLast: boolean; isStreaming?: boolean }) {
+  return (
+    <div className="report-content overflow-hidden min-w-0">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw]}
+        components={markdownComponents}
+      >
+        {content}
+      </ReactMarkdown>
+      {isLast && isStreaming && (
+        <span className="inline-block w-0.5 h-5 bg-[#e94560] animate-pulse ml-0.5 align-middle rounded-full" />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ActivityGroupInline — collapsible reasoning+tool group (for completed view)
+// ---------------------------------------------------------------------------
+
+function ActivityGroupInline({ items }: { items: ActivityItem[] }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const toolCount = items.filter((it) => it.kind === "tool").length;
+  const reasoningCount = items.filter((it) => it.kind === "reasoning").length;
+
+  const parts: string[] = [];
+  if (reasoningCount > 0) parts.push(`思考 ${reasoningCount}`);
+  if (toolCount > 0) parts.push(`ツール ${toolCount}`);
+  const summaryLabel = parts.join(" · ");
+  if (!summaryLabel) return null;
+
+  return (
+    <div>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="group inline-flex items-center gap-1 text-[11px] text-[#b0b5bd] hover:text-[#6b7280] transition-colors cursor-pointer"
+      >
+        <ChevronRight
+          className={`w-2.5 h-2.5 transition-transform duration-150 ${
+            isOpen ? "rotate-90" : ""
+          }`}
+        />
+        <span className="tracking-wide">{summaryLabel}</span>
+      </button>
+      {isOpen && (
+        <div className="mt-1.5 ml-[14px] border-l border-[#e5e7eb] pl-2.5">
+          <ActivityItemsRenderer items={items} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ActivityItemsRenderer — renders a flat list of activity items grouped by kind
+// ---------------------------------------------------------------------------
+
+function ActivityItemsRenderer({
   items,
   pendingQuestionGroup,
   onRespondToQuestions,
+  isStreaming,
 }: {
   items: ActivityItem[];
   pendingQuestionGroup?: PendingQuestionGroup | null;
   onRespondToQuestions?: (groupId: string, responses: Record<string, string>) => void;
+  isStreaming?: boolean;
 }) {
   const groups = groupConsecutive(items);
 
@@ -163,6 +359,24 @@ function TimelineContent({
                   content={(item as { content: string }).content}
                 />
               ))}
+            </div>
+          );
+        }
+        if (group.kind === "text") {
+          return (
+            <div key={`x-${gi}`}>
+              {group.items.map((item, idx) => {
+                const textItem = item as TextActivityItem;
+                const isLastText = gi === groups.length - 1 && idx === group.items.length - 1;
+                return (
+                  <TextSegment
+                    key={item.id}
+                    content={textItem.content}
+                    isLast={isLastText}
+                    isStreaming={isStreaming}
+                  />
+                );
+              })}
             </div>
           );
         }
@@ -213,10 +427,67 @@ function TimelineContent({
 }
 
 // ---------------------------------------------------------------------------
-// ActivityTimeline — unified component
+// InterleavedTimeline — full timeline with text segments inline
 // ---------------------------------------------------------------------------
 
-function ActivityTimeline({
+function InterleavedTimeline({
+  items,
+  isStreaming,
+  pendingQuestionGroup,
+  onRespondToQuestions,
+}: {
+  items: ActivityItem[];
+  isStreaming?: boolean;
+  pendingQuestionGroup?: PendingQuestionGroup | null;
+  onRespondToQuestions?: (groupId: string, responses: Record<string, string>) => void;
+}) {
+  if (!items || items.length === 0) return null;
+
+  // --- Streaming: show full interleaved timeline ---
+  if (isStreaming) {
+    return (
+      <div>
+        <ActivityItemsRenderer
+          items={items}
+          pendingQuestionGroup={pendingQuestionGroup}
+          onRespondToQuestions={onRespondToQuestions}
+          isStreaming={isStreaming}
+        />
+      </div>
+    );
+  }
+
+  // --- Completed: text/chart/ask_user always visible, reasoning/tools collapsed inline ---
+  const sections = groupIntoSections(items);
+
+  return (
+    <div className="space-y-2">
+      {sections.map((section, si) => {
+        if (section.type === "activity") {
+          return (
+            <ActivityGroupInline key={`act-${si}`} items={section.items} />
+          );
+        }
+        // Content section: render text, charts, ask_user directly
+        return (
+          <div key={`cnt-${si}`}>
+            <ActivityItemsRenderer
+              items={section.items}
+              pendingQuestionGroup={pendingQuestionGroup}
+              onRespondToQuestions={onRespondToQuestions}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Legacy ActivityTimeline — for messages without TextActivityItems (backward compat)
+// ---------------------------------------------------------------------------
+
+function LegacyActivityTimeline({
   items,
   isStreaming,
   pendingQuestionGroup,
@@ -231,11 +502,10 @@ function ActivityTimeline({
 
   if (!items || items.length === 0) return null;
 
-  // --- Streaming: show full interleaved timeline ---
   if (isStreaming) {
     return (
       <div className="mb-2.5 sm:mb-3">
-        <TimelineContent
+        <ActivityItemsRenderer
           items={items}
           pendingQuestionGroup={pendingQuestionGroup}
           onRespondToQuestions={onRespondToQuestions}
@@ -244,7 +514,7 @@ function ActivityTimeline({
     );
   }
 
-  // --- Completed: charts always visible, rest in collapsible summary ---
+  // Completed: charts always visible, rest in collapsible
   const chartItems = items.filter((it) => it.kind === "chart");
   const nonChartItems = items.filter((it) => it.kind !== "chart");
 
@@ -260,7 +530,6 @@ function ActivityTimeline({
 
   return (
     <div className="mb-2.5 sm:mb-3">
-      {/* Charts are always visible */}
       {chartItems.length > 0 && (
         <div className="space-y-2 mb-2">
           {chartItems.map((item) => (
@@ -271,7 +540,6 @@ function ActivityTimeline({
           ))}
         </div>
       )}
-      {/* Non-chart items in collapsible */}
       {nonChartItems.length > 0 && summaryLabel && (
         <>
           <button
@@ -287,7 +555,7 @@ function ActivityTimeline({
           </button>
           {isOpen && (
             <div className="mt-1.5 ml-[14px] border-l border-[#e5e7eb] pl-2.5">
-              <TimelineContent items={nonChartItems} />
+              <ActivityItemsRenderer items={nonChartItems} />
             </div>
           )}
         </>
@@ -325,10 +593,28 @@ function AssistantMessage({
   pendingQuestionGroup?: PendingQuestionGroup | null;
   onRespondToQuestions?: (groupId: string, responses: Record<string, string>) => void;
 }) {
+  const items = message.activityItems || [];
+  const hasTextItems = items.some((it) => it.kind === "text");
+
+  // --- New interleaved mode: text segments are in activityItems ---
+  if (hasTextItems) {
+    return (
+      <div className="assistant-response overflow-hidden min-w-0">
+        <InterleavedTimeline
+          items={items}
+          isStreaming={message.isStreaming}
+          pendingQuestionGroup={pendingQuestionGroup}
+          onRespondToQuestions={onRespondToQuestions}
+        />
+      </div>
+    );
+  }
+
+  // --- Legacy mode: text in message.content, activity items separate ---
   return (
     <div className="assistant-response overflow-hidden min-w-0">
-      <ActivityTimeline
-        items={message.activityItems || []}
+      <LegacyActivityTimeline
+        items={items}
         isStreaming={message.isStreaming}
         pendingQuestionGroup={pendingQuestionGroup}
         onRespondToQuestions={onRespondToQuestions}
@@ -338,112 +624,7 @@ function AssistantMessage({
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeRaw]}
-          components={{
-            h1: ({ children }) => (
-              <h1 className="text-lg sm:text-xl font-bold text-[#1a1a2e] mt-6 sm:mt-8 mb-2 sm:mb-3 pb-2 border-b-2 border-[#e94560]/20 first:mt-0">
-                {children}
-              </h1>
-            ),
-            h2: ({ children }) => (
-              <h2 className="text-sm sm:text-base font-bold text-[#1a1a2e] mt-5 sm:mt-6 mb-2 sm:mb-2.5 flex items-center gap-2 first:mt-0">
-                <span className="w-1 h-4 sm:h-5 bg-[#e94560] rounded-full inline-block shrink-0" />
-                {children}
-              </h2>
-            ),
-            h3: ({ children }) => (
-              <h3 className="text-[13px] sm:text-sm font-bold text-[#374151] mt-3 sm:mt-4 mb-1.5 sm:mb-2 first:mt-0">
-                {children}
-              </h3>
-            ),
-            p: ({ children }) => (
-              <p className="text-[13px] sm:text-sm text-[#374151] leading-[1.8] mb-2.5 sm:mb-3 last:mb-0 break-words">
-                {children}
-              </p>
-            ),
-            strong: ({ children }) => (
-              <strong className="font-bold text-[#1a1a2e]">{children}</strong>
-            ),
-            em: ({ children }) => (
-              <em className="text-[#6b7280] not-italic text-[11px] sm:text-xs">{children}</em>
-            ),
-            ul: ({ children }) => (
-              <ul className="space-y-1 mb-2.5 sm:mb-3 pl-0 list-none">{children}</ul>
-            ),
-            ol: ({ children }) => (
-              <ol className="space-y-1 mb-2.5 sm:mb-3 pl-0 list-none counter-reset-item">{children}</ol>
-            ),
-            li: ({ children }) => (
-              <li className="text-[13px] sm:text-sm text-[#374151] leading-relaxed flex items-start gap-1.5 sm:gap-2">
-                <span className="text-[#e94560] mt-1.5 shrink-0 text-[8px]">&#9679;</span>
-                <span className="min-w-0 break-words">{children}</span>
-              </li>
-            ),
-            table: ({ children }) => (
-              <div className="my-3 sm:my-4 rounded-lg border border-[#e5e7eb] overflow-hidden shadow-sm">
-                <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
-                  <table className="min-w-full text-xs sm:text-sm">{children}</table>
-                </div>
-              </div>
-            ),
-            thead: ({ children }) => (
-              <thead className="bg-[#f8f9fb]">{children}</thead>
-            ),
-            th: ({ children }) => (
-              <th className="px-2 sm:px-3.5 py-2 sm:py-2.5 text-left text-[11px] sm:text-xs font-bold text-[#1a1a2e] uppercase tracking-wider border-b border-[#e5e7eb] whitespace-nowrap">
-                {children}
-              </th>
-            ),
-            td: ({ children }) => (
-              <td className="px-2 sm:px-3.5 py-2 sm:py-2.5 text-xs sm:text-sm text-[#374151] border-b border-[#f0f1f5] tabular-nums whitespace-nowrap">
-                {children}
-              </td>
-            ),
-            tr: ({ children, ...props }) => {
-              const isInBody = !props.node?.position || true;
-              return (
-                <tr className={isInBody ? "hover:bg-[#f8f9fb]/60 transition-colors" : ""}>
-                  {children}
-                </tr>
-              );
-            },
-            code: ({ children, className }) => {
-              const isBlock = className?.includes("language-");
-              if (isBlock) {
-                return (
-                  <div className="my-2.5 sm:my-3 rounded-lg bg-[#1a1a2e] overflow-hidden">
-                    <div className="px-3 sm:px-4 py-1.5 bg-[#2a2a4e] text-[10px] text-[#9ca3af] uppercase tracking-wider font-medium">
-                      {className?.replace("language-", "") || "code"}
-                    </div>
-                    <pre className="px-3 sm:px-4 py-2.5 sm:py-3 overflow-x-auto text-[11px] sm:text-xs leading-relaxed">
-                      <code className="text-[#e5e7eb]">{children}</code>
-                    </pre>
-                  </div>
-                );
-              }
-              return (
-                <code className="text-[#e94560] bg-[#fef2f2] px-1 sm:px-1.5 py-0.5 rounded text-[11px] sm:text-xs font-medium break-all">
-                  {children}
-                </code>
-              );
-            },
-            pre: ({ children }) => <>{children}</>,
-            blockquote: ({ children }) => (
-              <blockquote className="my-2.5 sm:my-3 pl-3 sm:pl-4 border-l-3 border-[#e94560]/30 text-[#6b7280]">
-                {children}
-              </blockquote>
-            ),
-            hr: () => <hr className="my-4 sm:my-5 border-t border-[#e5e7eb]" />,
-            a: ({ children, href }) => (
-              <a
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[#3b82f6] underline underline-offset-2 hover:text-[#2563eb] transition-colors break-all"
-              >
-                {children}
-              </a>
-            ),
-          }}
+          components={markdownComponents}
         >
           {message.content || (message.isStreaming ? "" : "...")}
         </ReactMarkdown>

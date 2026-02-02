@@ -148,11 +148,13 @@ frontend/  - Next.js 16 + React 19 + bun
 - バックエンドで`ReasoningItem`を検出し、`item.raw_item.summary`からテキストを抽出
 - 英語のサマリは`gpt-5-nano`（`REASONING_TRANSLATE_MODEL`環境変数で変更可）+ `effort="minimal"` で日本語に翻訳（~111トークン/回、推論トークン0）
 - SSEで`{"type": "reasoning", "content": "日本語サマリ", "has_summary": true}`として送信
-- フロントエンドでは **統合ActivityTimeline** で表示:
-  - `activityItems: ActivityItem[]` — reasoning と tool call を到着順に単一配列で保持
-  - `ActivityItem` = `ReasoningActivityItem | ToolActivityItem`（`kind` で判別）
-  - ストリーミング中: 思考→ツール→思考→ツールの流れをそのまま時系列表示（連続する同種アイテムをグループ化）
-  - 完了後: 「▸ 思考 N · ツール M」の折りたたみトグル（展開でタイムライン表示）
+- フロントエンドでは **インターリーブActivityTimeline** で表示:
+  - `activityItems: ActivityItem[]` — reasoning, tool call, **テキストセグメント**, chart, ask_user を到着順に単一配列で保持
+  - `ActivityItem` = `ReasoningActivityItem | ToolActivityItem | TextActivityItem | ChartActivityItem | AskUserActivityItem`（`kind` で判別）
+  - **テキストセグメント**: `TextActivityItem` — 各ターンのテキスト出力をセグメント化。`response_created`, `tool_call`, `reasoning` イベントでセグメント境界をリセット
+  - ストリーミング中: reasoning→text→tool→text→chart→textの流れをそのまま時系列表示
+  - 完了後: テキスト・チャート・ask_userは常時表示、reasoning+toolは「▸ 思考 N · ツール M」の折りたたみトグル（セクション間にインライン表示）
+  - `TextActivityItem` があるメッセージ → 新インターリーブモード、ないメッセージ → レガシーモード（後方互換）
   - reasoningはReactMarkdown + remarkGfmでレンダリング（11px灰色テキスト）
   - ツールバッジは既存スタイル維持（緑完了/灰色実行中）
   - `toolCalls[]` と `reasoningMessages[]` は後方互換のため並行して保持
@@ -192,6 +194,22 @@ frontend/  - Next.js 16 + React 19 + bun
     - `LineChartView.tsx`, `BarChartView.tsx`, `AreaChartView.tsx`, `PieChartView.tsx`, `ScatterChartView.tsx`, `RadarChartView.tsx`, `FunnelChartView.tsx`, `TableChartView.tsx`
     - `chart-colors.ts` — カラーパレット + formatNumber ヘルパー
   - 統合: `frontend/app/dashboard/components/ChatMessage.tsx` — ActivityTimeline内でkind==="chart"時にChartRenderer表示
+
+## マルチレスポンス（インターリーブテキスト+ツール）機能
+- **概要**: エージェントが1つのユーザークエリに対して複数回テキストを出力し、ツール実行と交互に中間報告を行う機能
+- **SDKの仕組み**: Responses APIは1レスポンスで`ResponseOutputMessage`（テキスト）と`ResponseFunctionToolCall`（ツール）を同時に返せる。テキストのdeltaが先にストリーミングされ、その後ツールコール引数がストリーミングされる。SDKの`NextStepRunAgain`でループ継続時、中間テキストは`MessageOutputItem`として保持される
+- **バックエンドの対応**: 変更不要。既存の`text_delta`（`response.output_text.delta`）と`response_created`イベントで中間テキストもターン境界も送信済み
+- **フロントエンドの変更**:
+  - `TextActivityItem` 型追加（`kind: "text"`, `content: string`）
+  - `useChat.ts`: `currentTextItemIdRef` でテキストセグメントを管理。`text_delta` → 現在のセグメントに追記。`response_created` / `tool_call` / `reasoning` / `chart` / `ask_user` → セグメントリセット（次の`text_delta`で新セグメント開始）
+  - `ChatMessage.tsx`: `TextActivityItem` があるメッセージはインターリーブモードで全activityItemsを時系列表示。ないメッセージはレガシーモード（後方互換）
+  - 完了後の表示: テキスト・チャート・ask_userは常時表示。reasoning+toolは`ActivityGroupInline`コンポーネントで折りたたみバッジとしてインライン表示
+- **システムプロンプト**: 「中間報告ルール」セクション追加。ツール実行前に1-2文で進捗報告するよう指示
+- **後方互換**: DBに保存済みの古いメッセージは`TextActivityItem`を持たないため、レガシーモード（`message.content`を下部に表示）で表示
+- **情報ソース**:
+  - Responses API mixed output: https://community.openai.com/t/responses-api-returns-message-function-call/1293055
+  - SDK `_run_impl.py:423` — `has_tools_or_approvals_to_run()` がtrueかつテキストありの場合 `NextStepRunAgain` でループ継続
+  - SDK `run.py:1554` — `ResponseOutputItemDoneEvent` 処理でストリーミング中にイベント送信
 
 ## Ask-User ツール（エージェントからユーザーへの構造化質問・確認機能）
 - AIエージェントがチャット中にユーザーへ**構造化された複数の質問**を一括送信し、全回答をまとめて受け取ってから処理を続行する機能
