@@ -8,6 +8,7 @@ from agents.mcp.server import MCPServerStdioParams
 
 from app.config import get_settings
 from app.services.credentials_manager import CredentialsManager
+from app.services.compact_mcp import CompactMCPServer
 
 SESSION_TIMEOUT_SECONDS = 600  # 10 minutes
 
@@ -61,11 +62,12 @@ class MCPSessionManager:
             purpose=purpose,
         )
 
-    def create_ga4_server(self, user_id: str, refresh_token: str) -> tuple[MCPServerStdio, str]:
-        """Create GA4 MCP server. Returns (server, creds_path) for cleanup."""
+    def create_ga4_server(self, user_id: str, refresh_token: str) -> tuple[CompactMCPServer, str]:
+        """Create GA4 MCP server wrapped with CompactMCPServer for token optimization.
+        Returns (server, creds_path) for cleanup."""
         settings = get_settings()
         creds_path = self._create_creds(user_id, refresh_token, purpose="ga4")
-        server = MCPServerStdio(
+        raw_server = MCPServerStdio(
             params=MCPServerStdioParams(
                 command="analytics-mcp",
                 args=[],
@@ -79,7 +81,7 @@ class MCPSessionManager:
             cache_tools_list=True,
             client_session_timeout_seconds=120,
         )
-        return server, creds_path
+        return CompactMCPServer(raw_server), creds_path
 
     def create_gsc_server(self, user_id: str, refresh_token: str) -> tuple[MCPServerStdio, str]:
         """Create GSC MCP server. Returns (server, creds_path) for cleanup."""

@@ -422,7 +422,7 @@ GA4 property_id: {property_id}
                     return {
                         "type": "tool_result",
                         "call_id": call_id,
-                        "output": str(item.output)[:2000],
+                        "output": str(item.output)[:4000],
                     }
             # ReasoningItem handling (isinstance check, not type string)
             if isinstance(item, ReasoningItem):

@@ -238,6 +238,23 @@ frontend/  - Next.js 16 + React 19 + bun
   - SDK `ItemHelpers.input_to_new_input_list()`: `backend/.venv/lib/python3.12/site-packages/agents/items.py`
   - REPL参考実装: `backend/.venv/lib/python3.12/site-packages/agents/repl.py:66`
 
+## MCP出力トークン最適化（CompactMCPServer）
+- **問題**: GA4の`analytics-mcp`パッケージは`proto_to_dict()`で protobuf → verbose JSON 変換。各行の `dimension_values: [{value: "X"}]` / `metric_values: [{value: "Y"}]` 構造が **262%のオーバーヘッド**。28日×5チャネルの典型レポートで ~13,000トークン消費
+- **解決**: `CompactMCPServer` プロキシクラスで `call_tool` 出力を TSV に変換。**~77%トークン削減**
+- **変換対象**: `run_report`, `run_realtime_report` のみ（他のGA4ツールは出力が小さいためそのまま）
+- **GSC**: 既にマークダウンテーブル形式で効率的（変更不要）
+- **変換フォーマット**:
+  ```
+  date\tchannel\tsessions\tactiveUsers
+  20260127\tOrganic Search\t153\t130
+  ---
+  rows: 140
+  ```
+- **SSE truncation**: `str(item.output)[:4000]` に引き上げ（圧縮後は余裕がある）
+- **実装ファイル**:
+  - `backend/app/services/compact_mcp.py` — `CompactMCPServer` プロキシ + `_compact_ga4_report()` 変換関数
+  - `backend/app/services/mcp_manager.py` — `create_ga4_server()` で `CompactMCPServer(raw_server)` にラップ
+
 ## Important Notes
 - The OpenAI Agents SDK reads OPENAI_API_KEY from os.environ (set in main.py)
 - MCP servers use stdio transport (MCPServerStdio / MCPServerStdioParams)
