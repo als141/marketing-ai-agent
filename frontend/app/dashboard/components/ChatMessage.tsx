@@ -3,12 +3,21 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
-import type { Message, ActivityItem, ToolActivityItem } from "@/lib/types";
+import type {
+  Message,
+  ActivityItem,
+  ToolActivityItem,
+  AskUserActivityItem,
+  PendingQuestionGroup,
+} from "@/lib/types";
+import { AskUserPrompt } from "./AskUserPrompt";
 import { Wrench, Loader2, BarChart3, Search, Database, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
 interface Props {
   message: Message;
+  pendingQuestionGroup?: PendingQuestionGroup | null;
+  onRespondToQuestions?: (groupId: string, responses: Record<string, string>) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -61,7 +70,7 @@ const TOOL_LABELS: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 interface ItemGroup {
-  kind: "reasoning" | "tool";
+  kind: "reasoning" | "tool" | "ask_user";
   items: ActivityItem[];
 }
 
@@ -128,7 +137,15 @@ function ReasoningLine({ content }: { content: string }) {
 // TimelineContent — renders the interleaved item groups
 // ---------------------------------------------------------------------------
 
-function TimelineContent({ items }: { items: ActivityItem[] }) {
+function TimelineContent({
+  items,
+  pendingQuestionGroup,
+  onRespondToQuestions,
+}: {
+  items: ActivityItem[];
+  pendingQuestionGroup?: PendingQuestionGroup | null;
+  onRespondToQuestions?: (groupId: string, responses: Record<string, string>) => void;
+}) {
   const groups = groupConsecutive(items);
 
   return (
@@ -143,6 +160,28 @@ function TimelineContent({ items }: { items: ActivityItem[] }) {
                   content={(item as { content: string }).content}
                 />
               ))}
+            </div>
+          );
+        }
+        if (group.kind === "ask_user") {
+          return (
+            <div key={`a-${gi}`}>
+              {group.items.map((item) => {
+                const askItem = item as AskUserActivityItem;
+                const isAnswered = askItem.responses !== undefined;
+                return (
+                  <AskUserPrompt
+                    key={item.id}
+                    group={{
+                      groupId: askItem.groupId,
+                      questions: askItem.questions,
+                    }}
+                    onRespond={onRespondToQuestions || (() => {})}
+                    answered={isAnswered}
+                    answeredResponses={askItem.responses}
+                  />
+                );
+              })}
             </div>
           );
         }
@@ -165,9 +204,13 @@ function TimelineContent({ items }: { items: ActivityItem[] }) {
 function ActivityTimeline({
   items,
   isStreaming,
+  pendingQuestionGroup,
+  onRespondToQuestions,
 }: {
   items: ActivityItem[];
   isStreaming?: boolean;
+  pendingQuestionGroup?: PendingQuestionGroup | null;
+  onRespondToQuestions?: (groupId: string, responses: Record<string, string>) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -177,7 +220,11 @@ function ActivityTimeline({
   if (isStreaming) {
     return (
       <div className="mb-2.5 sm:mb-3">
-        <TimelineContent items={items} />
+        <TimelineContent
+          items={items}
+          pendingQuestionGroup={pendingQuestionGroup}
+          onRespondToQuestions={onRespondToQuestions}
+        />
       </div>
     );
   }
@@ -185,10 +232,12 @@ function ActivityTimeline({
   // --- Completed: collapsible summary ---
   const toolCount = items.filter((it) => it.kind === "tool").length;
   const reasoningCount = items.filter((it) => it.kind === "reasoning").length;
+  const askCount = items.filter((it) => it.kind === "ask_user").length;
 
   const parts: string[] = [];
   if (reasoningCount > 0) parts.push(`思考 ${reasoningCount}`);
   if (toolCount > 0) parts.push(`ツール ${toolCount}`);
+  if (askCount > 0) parts.push(`確認 ${askCount}`);
   const summaryLabel = parts.join(" · ");
 
   return (
@@ -233,12 +282,22 @@ function UserMessage({ message }: { message: Message }) {
 // AssistantMessage
 // ---------------------------------------------------------------------------
 
-function AssistantMessage({ message }: { message: Message }) {
+function AssistantMessage({
+  message,
+  pendingQuestionGroup,
+  onRespondToQuestions,
+}: {
+  message: Message;
+  pendingQuestionGroup?: PendingQuestionGroup | null;
+  onRespondToQuestions?: (groupId: string, responses: Record<string, string>) => void;
+}) {
   return (
     <div className="assistant-response overflow-hidden min-w-0">
       <ActivityTimeline
         items={message.activityItems || []}
         isStreaming={message.isStreaming}
+        pendingQuestionGroup={pendingQuestionGroup}
+        onRespondToQuestions={onRespondToQuestions}
       />
 
       <div className="report-content overflow-hidden min-w-0">
@@ -367,9 +426,15 @@ function AssistantMessage({ message }: { message: Message }) {
 // Export
 // ---------------------------------------------------------------------------
 
-export function ChatMessage({ message }: Props) {
+export function ChatMessage({ message, pendingQuestionGroup, onRespondToQuestions }: Props) {
   if (message.role === "user") {
     return <UserMessage message={message} />;
   }
-  return <AssistantMessage message={message} />;
+  return (
+    <AssistantMessage
+      message={message}
+      pendingQuestionGroup={pendingQuestionGroup}
+      onRespondToQuestions={onRespondToQuestions}
+    />
+  );
 }

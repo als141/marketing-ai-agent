@@ -169,6 +169,33 @@ frontend/  - Next.js 16 + React 19 + bun
   - SDK内ソース（デフォルト設定）: `backend/.venv/lib/python3.12/site-packages/agents/models/default_models.py`
   - SDK内ソース（ModelSettings定義）: `backend/.venv/lib/python3.12/site-packages/agents/model_settings.py`
 
+## Ask-User ツール（エージェントからユーザーへの構造化質問・確認機能）
+- AIエージェントがチャット中にユーザーへ**構造化された複数の質問**を一括送信し、全回答をまとめて受け取ってから処理を続行する機能
+- **アーキテクチャ**: `@function_tool` + `ToolContext[ChatContext]` + `asyncio.Event` + `asyncio.Queue`
+  - `ask_user` ツール: `questions` パラメータ（JSON配列文字列）で構造化質問を受け取る
+  - `PendingQuestionGroup` で複数質問をグループ管理、`asyncio.Event.wait()` で回答待機
+  - `asyncio.Queue` でSDKストリームイベントとask_userイベントを多重化
+  - `POST /api/chat/respond` エンドポイントで `{group_id, responses: {q_id: answer}}` を受信 → `Event.set()` でツール関数を再開
+- **質問フォーマット**: JSON配列 `[{"id":"kpi","question":"最重要KPIは？","type":"choice","options":["問い合わせ","資料請求","購入"]}, ...]`
+- **質問タイプ**: `choice`（選択肢ボタン）、`text`（自由入力）、`confirm`（はい/いいえ）
+- **タイムアウト**: 300秒（超過時はタイムアウトメッセージをツール戻り値として返す）
+- **UI**: 番号付きカード形式で複数質問を表示、マークダウンレンダリング対応、全回答後に一括送信ボタン
+- **MCPタイムアウト**: GA4/GSC共に `client_session_timeout_seconds=120`（30sから引き上げ）
+- **実装ファイル**:
+  - バックエンド: `backend/app/services/ask_user_store.py`（QuestionItem + PendingQuestionGroup + AskUserStore シングルトン）
+  - バックエンド: `backend/app/services/agent_service.py`（ChatContext dataclass + `ask_user` function_tool(questions: str) + Queue-based stream_chat）
+  - バックエンド: `backend/app/routers/chat.py`（`POST /api/chat/respond` {group_id, responses} + reasoning翻訳をevent_generator内で処理）
+  - フロントエンド: `frontend/lib/types.ts`（AskUserQuestionItem, AskUserActivityItem, PendingQuestionGroup, StreamEvent拡張）
+  - フロントエンド: `frontend/lib/hooks/useChat.ts`（pendingQuestionGroup state + respondToQuestions callback + ask_user SSEハンドリング）
+  - フロントエンド: `frontend/app/dashboard/components/AskUserPrompt.tsx`（構造化複数質問UI: choice/text/confirm, マークダウン対応, 回答済み表示）
+  - フロントエンド: `frontend/app/dashboard/components/ChatMessage.tsx`（ActivityTimeline内にask_user表示統合）
+  - フロントエンド: `frontend/app/dashboard/components/ChatWindow.tsx`（pendingQuestionGroup + onRespondToQuestions props）
+- **情報ソース**:
+  - SDK `ToolContext`: `backend/.venv/lib/python3.12/site-packages/agents/tool_context.py`
+  - SDK `RunContextWrapper`: `backend/.venv/lib/python3.12/site-packages/agents/run_context.py`
+  - SDK `@function_tool`: `backend/.venv/lib/python3.12/site-packages/agents/tool.py`
+- **注意**: Cloud Runでは`AskUserStore`はインメモリなのでインスタンス間で共有不可。単一インスタンス運用が前提。
+
 ## Important Notes
 - The OpenAI Agents SDK reads OPENAI_API_KEY from os.environ (set in main.py)
 - MCP servers use stdio transport (MCPServerStdio / MCPServerStdioParams)

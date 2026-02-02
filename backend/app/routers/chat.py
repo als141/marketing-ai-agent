@@ -1,13 +1,32 @@
 import json
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from app.middleware.auth_middleware import get_current_user
 from app.deps import get_supabase, get_agent_service
 from app.services.supabase_service import get_or_create_user, get_user_google_token
+from app.services.ask_user_store import ask_user_store
 from app.models.schemas import ChatRequest
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+
+
+class RespondRequest(BaseModel):
+    group_id: str
+    responses: dict[str, str]  # {question_id: answer}
+
+
+@router.post("/respond")
+async def respond_to_question(
+    body: RespondRequest,
+    user: dict = Depends(get_current_user),
+):
+    """Receive user's answers to an ask_user question group."""
+    ok = ask_user_store.submit_responses(body.group_id, body.responses)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Question group not found or already answered")
+    return {"status": "ok"}
 
 
 @router.post("/stream")
@@ -80,6 +99,15 @@ async def stream_chat(
             ):
                 if await request.is_disconnected():
                     break
+
+                # Handle reasoning translation inline
+                if event.get("_needs_translation") and event.get("content"):
+                    translated = await agent_service._translate_to_japanese(
+                        event["content"]
+                    )
+                    event["content"] = translated
+                # Remove internal flag before sending
+                event.pop("_needs_translation", None)
 
                 if event["type"] == "text_delta":
                     full_response += event.get("content", "")

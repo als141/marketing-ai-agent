@@ -17,7 +17,26 @@ export interface ToolActivityItem {
   output?: string; // undefined=実行中, string=完了
 }
 
-export type ActivityItem = ReasoningActivityItem | ToolActivityItem;
+export interface AskUserQuestionItem {
+  id: string;
+  question: string;
+  type: "choice" | "text" | "confirm";
+  options: string[];
+}
+
+export interface AskUserActivityItem {
+  id: string;
+  kind: "ask_user";
+  sequence: number;
+  groupId: string;
+  questions: AskUserQuestionItem[];
+  responses?: Record<string, string>; // {question_id: answer}, undefined=待機中
+}
+
+export type ActivityItem =
+  | ReasoningActivityItem
+  | ToolActivityItem
+  | AskUserActivityItem;
 
 // --- Message ---
 
@@ -75,6 +94,7 @@ export interface StreamEvent {
     | "tool_call"
     | "tool_result"
     | "reasoning"
+    | "ask_user"
     | "done"
     | "error"
     | "response_created";
@@ -86,4 +106,12 @@ export interface StreamEvent {
   message?: string;
   conversation_id?: string;
   has_summary?: boolean;
+  // ask_user fields (structured multi-question)
+  group_id?: string;
+  questions?: AskUserQuestionItem[];
+}
+
+export interface PendingQuestionGroup {
+  groupId: string;
+  questions: AskUserQuestionItem[];
 }

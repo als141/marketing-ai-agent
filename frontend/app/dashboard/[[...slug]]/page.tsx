@@ -63,6 +63,8 @@ export default function DashboardPage({ params }: PageProps) {
     loadMessages,
     currentConversationId,
     setConversationId,
+    pendingQuestionGroup,
+    respondToQuestions,
   } = useChat(selectedProperty?.property_id || "");
 
   // Check Google connection status
@@ -347,6 +349,8 @@ export default function DashboardPage({ params }: PageProps) {
               onStop={stopStreaming}
               disabled={!selectedProperty}
               propertyName={selectedProperty?.property_name}
+              pendingQuestionGroup={pendingQuestionGroup}
+              onRespondToQuestions={respondToQuestions}
             />
           ) : (
             <SettingsView onReconnectGoogle={handleReconnectGoogle} />

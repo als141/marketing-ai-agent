@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
-import type { Message } from "@/lib/types";
+import type { Message, PendingQuestionGroup } from "@/lib/types";
 import { BarChart3, Search, Zap, TrendingUp } from "lucide-react";
 
 interface Props {
@@ -13,6 +13,8 @@ interface Props {
   onStop: () => void;
   disabled?: boolean;
   propertyName?: string;
+  pendingQuestionGroup?: PendingQuestionGroup | null;
+  onRespondToQuestions?: (groupId: string, responses: Record<string, string>) => void;
 }
 
 function EmptyState({
@@ -80,6 +82,8 @@ export function ChatWindow({
   onStop,
   disabled,
   propertyName,
+  pendingQuestionGroup,
+  onRespondToQuestions,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -98,8 +102,17 @@ export function ChatWindow({
           <EmptyState propertyName={propertyName} onSend={onSend} />
         ) : (
           <div className="max-w-3xl mx-auto py-4 sm:py-6 px-4 sm:px-6 space-y-5 sm:space-y-6 min-w-0">
-            {messages.map((msg) => (
-              <ChatMessage key={msg.id} message={msg} />
+            {messages.map((msg, idx) => (
+              <ChatMessage
+                key={msg.id}
+                message={msg}
+                pendingQuestionGroup={
+                  msg.isStreaming || idx === messages.length - 1
+                    ? pendingQuestionGroup
+                    : undefined
+                }
+                onRespondToQuestions={onRespondToQuestions}
+              />
             ))}
           </div>
         )}

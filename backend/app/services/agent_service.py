@@ -1,17 +1,98 @@
+import asyncio
 import json
 import logging
 from contextlib import AsyncExitStack
-from typing import AsyncGenerator
-from agents import Agent, Runner, ModelSettings
+from dataclasses import dataclass
+from typing import AsyncGenerator, Callable, Awaitable
+
+from agents import Agent, Runner, ModelSettings, function_tool
+from agents.tool_context import ToolContext
 from agents.items import ReasoningItem
 from openai import AsyncOpenAI
 from openai.types.shared import Reasoning
 
 from app.config import get_settings
 from app.services.mcp_manager import MCPSessionManager
+from app.services.ask_user_store import AskUserStore, ask_user_store
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# Sentinel to signal end-of-stream from the SDK background task
+_SENTINEL = object()
+
+
+@dataclass
+class ChatContext:
+    """Custom context passed to tool functions via ToolContext[ChatContext]."""
+
+    emit_event: Callable[[dict], Awaitable[None]]
+    ask_user_store: AskUserStore
+    conversation_id: str
+
+
+@function_tool
+async def ask_user(
+    ctx: ToolContext[ChatContext],
+    questions: str,
+) -> str:
+    """ユーザーに構造化された質問を表示し、全回答をまとめて受け取る。
+
+    Args:
+        questions: 質問のJSON配列文字列。各要素は以下の形式:
+            {"id": "一意ID", "question": "質問文（短文）", "type": "choice|text|confirm", "options": ["選択肢1", "選択肢2", ...]}
+            - type="choice": optionsから1つ選択。必ずoptionsを指定すること
+            - type="text": 自由テキスト入力
+            - type="confirm": はい/いいえの確認
+            例: [{"id":"kpi","question":"最重要KPIは？","type":"choice","options":["問い合わせ","資料請求","購入","その他"]},{"id":"concern","question":"SEOで困っていることは？","type":"text"}]
+    """
+    try:
+        parsed = json.loads(questions)
+        if not isinstance(parsed, list) or len(parsed) == 0:
+            return "（質問の形式が不正です）"
+    except json.JSONDecodeError:
+        return "（質問のJSON解析に失敗しました）"
+
+    store = ctx.context.ask_user_store
+    group = store.create_question_group(parsed)
+
+    # Build the SSE event with structured questions
+    questions_data = [
+        {
+            "id": q.id,
+            "question": q.question,
+            "type": q.question_type,
+            "options": q.options,
+        }
+        for q in group.questions
+    ]
+
+    await ctx.context.emit_event(
+        {
+            "type": "ask_user",
+            "group_id": group.group_id,
+            "questions": questions_data,
+        }
+    )
+
+    try:
+        await asyncio.wait_for(group.event.wait(), timeout=300)
+    except asyncio.TimeoutError:
+        store.cleanup(group.group_id)
+        return "（ユーザーからの応答がタイムアウトしました）"
+
+    responses = group.responses or {}
+    store.cleanup(group.group_id)
+
+    # Return as readable text for the agent
+    parts = []
+    for q in group.questions:
+        answer = responses.get(q.id, "").strip()
+        if answer:
+            parts.append(f"- {q.question}: {answer}")
+        else:
+            parts.append(f"- {q.question}: （スキップ — お任せ）")
+    return "\n".join(parts)
 
 
 class AgentService:
@@ -32,6 +113,24 @@ GA4 property_id: {property_id}
 3. **失敗したらリトライせよ**: ツール呼び出しがエラーになったら、パラメータを修正して再実行せよ。ユーザーにエラーを見せるな。
 4. **簡潔に答えよ**: 冗長な前置き・注釈・免責は不要。データとインサイトだけを伝えろ。
 5. **GA4とGSCを組み合わせろ**: SEOの質問にはGSCで検索クエリ・順位・CTRを取得し、GA4でサイト内行動・CVを取得して、両面から分析せよ。
+
+## ユーザーへの質問・確認（ask_user ツール）
+- 分析に必要な情報が本当に不足していて、推測では進められない場合のみ `ask_user` ツールを使ってユーザーに確認せよ。
+- **ただし、安易にユーザーに質問するな**。プロとして自分で判断できることは質問せずに実行せよ。
+- ユーザーが「質問して」「確認して」と明示的に依頼した場合は、積極的に構造化質問を活用せよ。
+- **構造化質問形式**: `questions` パラメータにJSON配列を渡す。各質問は独立した短文で、回答しやすい形式にすること。
+- 質問のルール:
+  - 1つの質問は**わかりやすい短文**にせよ。専門用語は避け、誰でも理解できる表現を使え。
+  - 選択肢で回答できるものは必ず `type: "choice"` + `options` を使え（ユーザーの負担が最も少ない）
+  - 自由入力が必要な場合のみ `type: "text"` を使え
+  - はい/いいえで回答できる場合は `type: "confirm"` を使え
+  - 1回のask_userで**2〜5個**の質問を送れ。多すぎず少なすぎず。
+  - 選択肢に「その他」を含めると、ユーザーが想定外の回答もしやすい
+  - **全ての回答は任意**。ユーザーが一部だけ回答しても問題ない。未回答の項目はプロとして最適な判断で進めよ。
+- 例:
+  ```json
+  [{{"id":"kpi","question":"一番伸ばしたい成果は？","type":"choice","options":["問い合わせ数","売上","アクセス数","その他"]}},{{"id":"target","question":"主なお客さんは？","type":"choice","options":["企業向け(B2B)","個人向け(B2C)","両方"]}},{{"id":"concern","question":"SEOで気になることがあれば教えてください","type":"text"}}]
+  ```
 
 ## GA4ツール使用ルール
 
@@ -117,11 +216,25 @@ GA4 property_id: {property_id}
                 await stack.enter_async_context(pair.ga4_server)
                 await stack.enter_async_context(pair.gsc_server)
 
+                # Queue for multiplexing SDK events and out-of-band events (ask_user)
+                queue: asyncio.Queue[dict | object] = asyncio.Queue()
+
+                async def emit_event(event: dict) -> None:
+                    """Callback passed to ChatContext — puts events into the queue."""
+                    await queue.put(event)
+
+                chat_context = ChatContext(
+                    emit_event=emit_event,
+                    ask_user_store=ask_user_store,
+                    conversation_id="",  # Will be set by the router
+                )
+
                 agent = Agent(
                     name="GA4 & GSC Analytics Agent",
                     instructions=self._build_system_prompt(property_id),
                     model="gpt-5.2",
                     mcp_servers=[pair.ga4_server, pair.gsc_server],
+                    tools=[ask_user],
                     model_settings=ModelSettings(
                         reasoning=Reasoning(effort="medium", summary="detailed"),
                         verbosity="low",
@@ -133,62 +246,105 @@ GA4 property_id: {property_id}
                     input_messages.extend(conversation_history)
                 input_messages.append({"role": "user", "content": message})
 
-                result = Runner.run_streamed(agent, input=input_messages)
+                result = Runner.run_streamed(
+                    agent, input=input_messages, context=chat_context,
+                    max_turns=50,
+                )
 
-                async for event in result.stream_events():
-                    if event.type == "raw_response_event":
-                        data = event.data
-                        event_type = getattr(data, "type", "")
-                        if event_type == "response.output_text.delta":
-                            delta = getattr(data, "delta", "")
-                            if delta:
-                                yield {"type": "text_delta", "content": delta}
-                        elif event_type == "response.created":
-                            yield {"type": "response_created"}
-                    elif event.type == "run_item_stream_event":
-                        item = event.item
-                        if hasattr(item, "type"):
-                            if item.type == "tool_call_item":
-                                raw = item.raw_item
-                                yield {
-                                    "type": "tool_call",
-                                    "call_id": getattr(raw, "call_id", None),
-                                    "name": getattr(raw, "name", "unknown"),
-                                    "arguments": getattr(raw, "arguments", ""),
-                                }
-                            elif item.type == "tool_call_output_item":
-                                raw = item.raw_item
-                                # raw_item is FunctionCallOutput (TypedDict)
-                                call_id = raw["call_id"] if isinstance(raw, dict) else getattr(raw, "call_id", None)
-                                yield {
-                                    "type": "tool_result",
-                                    "call_id": call_id,
-                                    "output": str(item.output)[:2000],
-                                }
-                        # ReasoningItem handling (isinstance check, not type string)
-                        if isinstance(item, ReasoningItem):
-                            summary_text = None
-                            if hasattr(item.raw_item, "summary") and item.raw_item.summary:
-                                texts = [
-                                    s.text
-                                    for s in item.raw_item.summary
-                                    if hasattr(s, "text") and s.text
-                                ]
-                                if texts:
-                                    summary_text = " ".join(texts)
+                async def _pump_sdk_events() -> None:
+                    """Background task: read SDK stream events and put them into the queue."""
+                    try:
+                        async for event in result.stream_events():
+                            sdk_event = self._process_sdk_event(event)
+                            if sdk_event is not None:
+                                await queue.put(sdk_event)
+                    except Exception as e:
+                        await queue.put(
+                            {"type": "error", "message": str(e)}
+                        )
+                    finally:
+                        await queue.put(_SENTINEL)
 
-                            if summary_text:
-                                summary_text = await self._translate_to_japanese(summary_text)
+                pump_task = asyncio.create_task(_pump_sdk_events())
 
-                            yield {
-                                "type": "reasoning",
-                                "content": summary_text or "分析中...",
-                                "has_summary": summary_text is not None,
-                            }
+                try:
+                    while True:
+                        item = await queue.get()
+                        if item is _SENTINEL:
+                            break
+                        yield item  # type: ignore[misc]
+                finally:
+                    if not pump_task.done():
+                        pump_task.cancel()
+                        try:
+                            await pump_task
+                        except (asyncio.CancelledError, Exception):
+                            pass
 
                 yield {"type": "done"}
         finally:
             self.mcp_manager.cleanup_server_pair(pair)
+
+    def _process_sdk_event(self, event) -> dict | None:
+        """Convert a single SDK stream event into a dict for SSE, or None to skip."""
+        if event.type == "raw_response_event":
+            data = event.data
+            event_type = getattr(data, "type", "")
+            if event_type == "response.output_text.delta":
+                delta = getattr(data, "delta", "")
+                if delta:
+                    return {"type": "text_delta", "content": delta}
+            elif event_type == "response.created":
+                return {"type": "response_created"}
+        elif event.type == "run_item_stream_event":
+            item = event.item
+            if hasattr(item, "type"):
+                if item.type == "tool_call_item":
+                    raw = item.raw_item
+                    return {
+                        "type": "tool_call",
+                        "call_id": getattr(raw, "call_id", None),
+                        "name": getattr(raw, "name", "unknown"),
+                        "arguments": getattr(raw, "arguments", ""),
+                    }
+                elif item.type == "tool_call_output_item":
+                    raw = item.raw_item
+                    call_id = (
+                        raw["call_id"]
+                        if isinstance(raw, dict)
+                        else getattr(raw, "call_id", None)
+                    )
+                    return {
+                        "type": "tool_result",
+                        "call_id": call_id,
+                        "output": str(item.output)[:2000],
+                    }
+            # ReasoningItem handling (isinstance check, not type string)
+            if isinstance(item, ReasoningItem):
+                return self._process_reasoning_item(item)
+        return None
+
+    def _process_reasoning_item(self, item: ReasoningItem) -> dict:
+        """Extract reasoning summary from a ReasoningItem."""
+        summary_text = None
+        if hasattr(item.raw_item, "summary") and item.raw_item.summary:
+            texts = [
+                s.text
+                for s in item.raw_item.summary
+                if hasattr(s, "text") and s.text
+            ]
+            if texts:
+                summary_text = " ".join(texts)
+
+        # Note: translation is sync-unfriendly here in the pump task.
+        # We'll handle translation in the queue consumer or skip for now.
+        # For simplicity, mark for translation in the event dict.
+        return {
+            "type": "reasoning",
+            "content": summary_text or "分析中...",
+            "has_summary": summary_text is not None,
+            "_needs_translation": summary_text is not None,
+        }
 
     async def _translate_to_japanese(self, text: str) -> str:
         """英語の reasoning summary を Responses API で日本語に翻訳"""
@@ -212,7 +368,9 @@ GA4 property_id: {property_id}
         user_id: str,
         refresh_token: str,
     ) -> list[dict]:
-        mcp_server, creds_path = self.mcp_manager.create_ga4_server(user_id, refresh_token)
+        mcp_server, creds_path = self.mcp_manager.create_ga4_server(
+            user_id, refresh_token
+        )
 
         try:
             async with mcp_server:
@@ -241,9 +399,15 @@ GA4 property_id: {property_id}
 
                     accounts = []
                     if isinstance(data, dict):
-                        if "property_summaries" in data or "propertySummaries" in data:
+                        if (
+                            "property_summaries" in data
+                            or "propertySummaries" in data
+                        ):
                             accounts = [data]
-                        elif "account_summaries" in data or "accountSummaries" in data:
+                        elif (
+                            "account_summaries" in data
+                            or "accountSummaries" in data
+                        ):
                             accounts = (
                                 data.get("account_summaries")
                                 or data.get("accountSummaries")
@@ -264,15 +428,17 @@ GA4 property_id: {property_id}
                             or []
                         )
                         for prop in prop_summaries:
-                            properties.append({
-                                "property_id": prop.get("property", ""),
-                                "property_name": (
-                                    prop.get("display_name")
-                                    or prop.get("displayName")
-                                    or ""
-                                ),
-                                "account_name": account_name,
-                            })
+                            properties.append(
+                                {
+                                    "property_id": prop.get("property", ""),
+                                    "property_name": (
+                                        prop.get("display_name")
+                                        or prop.get("displayName")
+                                        or ""
+                                    ),
+                                    "account_name": account_name,
+                                }
+                            )
 
                 print(f"[Properties] Extracted {len(properties)} properties")
                 return properties

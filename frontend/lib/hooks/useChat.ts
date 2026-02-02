@@ -7,6 +7,8 @@ import type {
   ToolCall,
   StreamEvent,
   ToolActivityItem,
+  AskUserActivityItem,
+  PendingQuestionGroup,
 } from "@/lib/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -17,9 +19,12 @@ export function useChat(propertyId: string) {
   const [currentConversationId, setCurrentConversationId] = useState<
     string | null
   >(null);
+  const [pendingQuestionGroup, setPendingQuestionGroup] =
+    useState<PendingQuestionGroup | null>(null);
   const { getToken } = useAuth();
   const abortRef = useRef<AbortController | null>(null);
   const seqRef = useRef(0);
+  const assistantIdRef = useRef<string | null>(null);
 
   const loadMessages = useCallback((msgs: Message[]) => {
     setMessages(msgs);
@@ -28,6 +33,45 @@ export function useChat(propertyId: string) {
   const setConversationId = useCallback((id: string | null) => {
     setCurrentConversationId(id);
   }, []);
+
+  const respondToQuestions = useCallback(
+    async (groupId: string, responses: Record<string, string>) => {
+      const token = await getToken();
+
+      // Mark the ask_user activity item as responded
+      const currentAssistantId = assistantIdRef.current;
+      if (currentAssistantId) {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== currentAssistantId) return m;
+            const items = (m.activityItems || []).map((it) =>
+              it.kind === "ask_user" &&
+              (it as AskUserActivityItem).groupId === groupId
+                ? ({ ...it, responses } as AskUserActivityItem)
+                : it
+            );
+            return { ...m, activityItems: items };
+          })
+        );
+      }
+
+      setPendingQuestionGroup(null);
+
+      try {
+        await fetch(`${API_URL}/api/chat/respond`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ group_id: groupId, responses }),
+        });
+      } catch (err) {
+        console.error("Failed to respond to questions:", err);
+      }
+    },
+    [getToken]
+  );
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -42,6 +86,7 @@ export function useChat(propertyId: string) {
       setIsStreaming(true);
 
       const assistantId = crypto.randomUUID();
+      assistantIdRef.current = assistantId;
       setMessages((prev) => [
         ...prev,
         {
@@ -141,7 +186,6 @@ export function useChat(propertyId: string) {
                 prev.map((m) => {
                   if (m.id !== assistantId) return m;
 
-                  // activityItems: call_idでマッチング
                   const items = [...(m.activityItems || [])];
                   const aidx = event.call_id
                     ? items.findIndex(
@@ -163,7 +207,6 @@ export function useChat(propertyId: string) {
                     } as ToolActivityItem;
                   }
 
-                  // toolCalls: call_idでマッチング (backward compat)
                   const calls = [...(m.toolCalls || [])];
                   const cidx = event.call_id
                     ? calls.findIndex(
@@ -201,6 +244,32 @@ export function useChat(propertyId: string) {
                     : m
                 )
               );
+            } else if (event.type === "ask_user" && event.group_id && event.questions) {
+              const seq = ++seqRef.current;
+              const askItem: AskUserActivityItem = {
+                id: crypto.randomUUID(),
+                kind: "ask_user",
+                sequence: seq,
+                groupId: event.group_id,
+                questions: event.questions,
+              };
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? {
+                        ...m,
+                        activityItems: [
+                          ...(m.activityItems || []),
+                          askItem,
+                        ],
+                      }
+                    : m
+                )
+              );
+              setPendingQuestionGroup({
+                groupId: event.group_id,
+                questions: event.questions,
+              });
             } else if (event.type === "done") {
               if (event.conversation_id) {
                 setCurrentConversationId(event.conversation_id);
@@ -213,7 +282,6 @@ export function useChat(propertyId: string) {
               setMessages((prev) =>
                 prev.map((m) => {
                   if (m.id !== assistantId) return m;
-                  // 未完了ツールを全て完了扱い
                   const items = (m.activityItems || []).map((it) =>
                     it.kind === "tool" && !(it as ToolActivityItem).output
                       ? ({ ...it, output: "(completed)" } as ToolActivityItem)
@@ -230,6 +298,7 @@ export function useChat(propertyId: string) {
                   };
                 })
               );
+              setPendingQuestionGroup(null);
             } else if (event.type === "error") {
               setMessages((prev) =>
                 prev.map((m) =>
@@ -263,6 +332,7 @@ export function useChat(propertyId: string) {
         }
       } finally {
         setIsStreaming(false);
+        assistantIdRef.current = null;
       }
     },
     [currentConversationId, propertyId, getToken]
@@ -276,6 +346,7 @@ export function useChat(propertyId: string) {
   const clearMessages = useCallback(() => {
     setMessages([]);
     setCurrentConversationId(null);
+    setPendingQuestionGroup(null);
     window.history.replaceState({}, "", "/dashboard");
   }, []);
 
@@ -288,5 +359,7 @@ export function useChat(propertyId: string) {
     loadMessages,
     currentConversationId,
     setConversationId,
+    pendingQuestionGroup,
+    respondToQuestions,
   };
 }

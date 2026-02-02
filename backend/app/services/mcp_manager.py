@@ -77,7 +77,7 @@ class MCPSessionManager:
                 },
             ),
             cache_tools_list=True,
-            client_session_timeout_seconds=30,
+            client_session_timeout_seconds=120,
         )
         return server, creds_path
 
@@ -93,7 +93,7 @@ class MCPSessionManager:
                 },
             ),
             cache_tools_list=True,
-            client_session_timeout_seconds=30,
+            client_session_timeout_seconds=120,
         )
         return server, creds_path
 
