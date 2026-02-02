@@ -103,6 +103,23 @@ async def stream_chat(
     async def event_generator():
         full_response = ""
         tool_calls_data = []
+        # Collect activity items for persistence (mirrors frontend logic)
+        activity_items: list[dict] = []
+        current_text = ""
+        seq = 0
+
+        def _flush_text():
+            """Flush accumulated text into a TextActivityItem."""
+            nonlocal current_text, seq
+            if current_text:
+                seq += 1
+                activity_items.append({
+                    "kind": "text",
+                    "sequence": seq,
+                    "content": current_text,
+                })
+                current_text = ""
+
         try:
             async for event in agent_service.stream_chat(
                 user_id=user["clerk_id"],
@@ -136,25 +153,83 @@ async def stream_chat(
                         )
                     continue
 
+                # --- Collect activity items (mirrors frontend useChat logic) ---
                 if event["type"] == "text_delta":
                     full_response += event.get("content", "")
+                    current_text += event.get("content", "")
+                elif event["type"] == "response_created":
+                    _flush_text()
                 elif event["type"] == "tool_call":
+                    _flush_text()
                     tool_calls_data.append(event)
+                    seq += 1
+                    activity_items.append({
+                        "kind": "tool",
+                        "sequence": seq,
+                        "name": event.get("name", "unknown"),
+                        "call_id": event.get("call_id"),
+                        "arguments": event.get("arguments"),
+                    })
+                elif event["type"] == "tool_result":
+                    # Update matching tool activity item
+                    call_id = event.get("call_id")
+                    for item in reversed(activity_items):
+                        if (
+                            item["kind"] == "tool"
+                            and item.get("call_id") == call_id
+                            and "output" not in item
+                        ):
+                            item["output"] = event.get("output", "(completed)")
+                            break
+                elif event["type"] == "reasoning":
+                    _flush_text()
+                    seq += 1
+                    activity_items.append({
+                        "kind": "reasoning",
+                        "sequence": seq,
+                        "content": event.get("content", ""),
+                    })
+                elif event["type"] == "chart":
+                    _flush_text()
+                    seq += 1
+                    activity_items.append({
+                        "kind": "chart",
+                        "sequence": seq,
+                        "spec": event.get("spec"),
+                    })
+                elif event["type"] == "ask_user":
+                    _flush_text()
+                    seq += 1
+                    activity_items.append({
+                        "kind": "ask_user",
+                        "sequence": seq,
+                        "groupId": event.get("group_id"),
+                        "questions": event.get("questions"),
+                    })
                 elif event["type"] == "done":
-                    # Save assistant response
-                    if full_response:
+                    _flush_text()
+
+                    # Mark any unfinished tools as completed
+                    for item in activity_items:
+                        if item["kind"] == "tool" and "output" not in item:
+                            item["output"] = "(completed)"
+
+                    # Save assistant response with activity items
+                    if full_response or activity_items:
                         msg_data = {
                             "conversation_id": conversation_id,
                             "role": "assistant",
-                            "content": full_response,
+                            "content": full_response or "",
                         }
                         if tool_calls_data:
                             msg_data["tool_calls"] = json.loads(
                                 json.dumps(tool_calls_data)
                             )
+                        if activity_items:
+                            msg_data["activity_items"] = activity_items
                         supabase.table("messages").insert(msg_data).execute()
 
-                    # Update conversation title if first message
+                    # Update conversation timestamp
                     supabase.table("conversations").update(
                         {"updated_at": "now()"}
                     ).eq("id", conversation_id).execute()

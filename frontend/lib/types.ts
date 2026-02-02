@@ -133,7 +133,22 @@ export interface MessageRecord {
   role: string;
   content: string;
   tool_calls: unknown | null;
+  activity_items: ActivityItemRecord[] | null;
   created_at: string;
+}
+
+/** Raw activity item as stored in DB (no `id` field — generated on load) */
+export interface ActivityItemRecord {
+  kind: string;
+  sequence: number;
+  content?: string;
+  name?: string;
+  call_id?: string;
+  arguments?: string;
+  output?: string;
+  spec?: ChartSpec;
+  groupId?: string;
+  questions?: AskUserQuestionItem[];
 }
 
 export interface PropertySummary {

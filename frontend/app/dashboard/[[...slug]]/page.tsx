@@ -16,6 +16,9 @@ import type {
   Conversation,
   GoogleAuthStatus,
   Message,
+  MessageRecord,
+  ActivityItem,
+  ActivityItemRecord,
 } from "@/lib/types";
 import {
   Loader2,
@@ -31,6 +34,29 @@ import {
   SheetContent,
   SheetTitle,
 } from "@/components/ui/sheet";
+
+/** Reconstruct ActivityItem[] from DB activity_items records */
+function restoreActivityItems(records: ActivityItemRecord[] | null | undefined): ActivityItem[] | undefined {
+  if (!records || records.length === 0) return undefined;
+  return records.map((r) => ({
+    ...r,
+    id: crypto.randomUUID(),
+  })) as ActivityItem[];
+}
+
+/** Convert a MessageRecord from the API into a frontend Message */
+function recordToMessage(m: MessageRecord): Message {
+  const msg: Message = {
+    id: m.id,
+    role: m.role as "user" | "assistant",
+    content: m.content,
+  };
+  const items = restoreActivityItems(m.activity_items);
+  if (items) {
+    msg.activityItems = items;
+  }
+  return msg;
+}
 
 interface PageProps {
   params: Promise<{ slug?: string[] }>;
@@ -110,13 +136,9 @@ export default function DashboardPage({ params }: PageProps) {
         );
         setConversationId(initialConversationId!);
         if (data.messages) {
-          const msgs: Message[] = data.messages
+          const msgs: Message[] = (data.messages as MessageRecord[])
             .filter((m) => m.role === "user" || m.role === "assistant")
-            .map((m) => ({
-              id: m.id,
-              role: m.role as "user" | "assistant",
-              content: m.content,
-            }));
+            .map(recordToMessage);
           loadMessages(msgs);
         }
       } catch (err) {
@@ -150,13 +172,9 @@ export default function DashboardPage({ params }: PageProps) {
           token
         );
         if (data.messages) {
-          const msgs: Message[] = data.messages
+          const msgs: Message[] = (data.messages as MessageRecord[])
             .filter((m) => m.role === "user" || m.role === "assistant")
-            .map((m) => ({
-              id: m.id,
-              role: m.role as "user" | "assistant",
-              content: m.content,
-            }));
+            .map(recordToMessage);
           loadMessages(msgs);
         }
       } catch (err) {

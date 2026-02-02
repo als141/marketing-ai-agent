@@ -330,7 +330,7 @@ GA4 property_id: {property_id}
                 agent = Agent(
                     name="GA4 & GSC Analytics Agent",
                     instructions=self._build_system_prompt(property_id),
-                    model="gpt-5.2",
+                    model=settings.chat_model,
                     mcp_servers=[pair.ga4_server, pair.gsc_server],
                     tools=[ask_user, render_chart],
                     model_settings=ModelSettings(

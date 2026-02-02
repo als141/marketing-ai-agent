@@ -241,10 +241,15 @@ frontend/  - Next.js 16 + React 19 + bun
 ## 会話履歴管理（A案: to_input_list + DB）
 - **方式**: 各ターン完了後に `result.to_input_list()` で全会話コンテキスト（ツールコール、ツール結果、推論アイテム含む）をResponses API入力形式で取得し、`conversations.context_items` (JSONB) に保存
 - **次ターンの入力**: `context_items` が存在すれば `context_items + [新ユーザーメッセージ]` を Runner の input に渡す。なければ従来の `role+content` historyにフォールバック
-- **表示用メッセージ**: 従来通り `messages` テーブルに `role+content` で保存（UIの会話履歴表示用）
-- **DB変更**: `conversations` テーブルに `context_items JSONB` カラム追加が必要
-  - マイグレーション: `backend/migrations/add_context_items.sql`
-  - Supabase SQL Editor で手動実行: `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS context_items JSONB;`
+- **表示用メッセージ**: `messages` テーブルに `role+content+activity_items` で保存（UIの会話履歴表示用）
+- **DB変更**:
+  - `conversations` テーブルに `context_items JSONB` カラム追加
+    - Supabase SQL Editor で手動実行: `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS context_items JSONB;`
+  - `messages` テーブルに `activity_items JSONB` カラム追加（リロード時のUI復元用）
+    - マイグレーション: `supabase/migrations/20260202100000_add_activity_items.sql`
+    - Supabase SQL Editor で手動実行: `ALTER TABLE messages ADD COLUMN IF NOT EXISTS activity_items JSONB;`
+- **activity_items保存**: `chat.py` の `event_generator` がストリーミング中にactivityItemsを収集（フロントエンドのuseChat.tsと同じセグメント分割ロジック）。`done`イベント時にメッセージと一緒にDB保存
+- **activity_items復元**: `page.tsx` の `recordToMessage()` がDBから読んだ `activity_items` を `ActivityItem[]` に変換（IDはクライアント側で生成）。`TextActivityItem` があればインターリーブモードで表示
 - **シリアライズ**: `_serialize_input_list()` ヘルパーで TypedDict/Pydantic を dict に変換
 - **内部イベント**: `_context_items` タイプのイベントは `chat.py` でインターセプトしDB保存、クライアントには送信しない
 - **コンテキスト圧縮**: 未実装。将来的に `openai_responses_compaction_session` または手動 compact API で対応予定
@@ -364,3 +369,9 @@ Dashboard (flex)
 - **何をやった**: 最初のレスポンシブ修正でフォントサイズとパディングの調整だけ行った
 - **何が悪かった**: 根本原因（flexの`min-w-0`欠如、`w-full`テーブル問題）を見逃し、表面的なサイズ調整だけした。結果、テーブルが画面外にはみ出したまま
 - **次からどうする**: レスポンシブ対応では「コンテンツが画面幅を超えないこと」を最優先で確認する。まずoverflowの制約チェーン（min-w-0, overflow-hidden）を確保してから、サイズ調整に入る
+
+### マイグレーションファイルの配置を間違えた
+- **何をやった**: `backend/migrations/add_activity_items.sql` にマイグレーションを作成した
+- **何が悪かった**: このプロジェクトのマイグレーションは `supabase/migrations/` に配置するルール。既存の `20260131000000_initial.sql` や `20260202000000_add_context_items.sql` が全てそこにある
+- **ユーザーの指摘**: 「だからマイグレーションはsupabaseディレクトリに配置しろって毎回言ってるよね？？」
+- **次からどうする**: マイグレーションSQLは**必ず `supabase/migrations/` に配置**する。ファイル名は `YYYYMMDDHHMMSS_description.sql` 形式。`backend/migrations/` は使わない
