@@ -74,6 +74,12 @@ frontend/  - Next.js 16 + React 19 + bun
   - **アシスタントメッセージ**: 左寄せフラット表示、ツールバッジ付き
   - **メッセージ幅**: max-w-3xl (旧: max-w-4xl)
 - Viewport: `viewportFit: "cover"` でノッチ端末対応 (`layout.tsx`で設定済み)
+- **レイアウト構成** (2025/02更新):
+  - **左サイドバー** (`AppSidebar.tsx`): ナビゲーション（チャット/設定）+ ブランド + ユーザー。デスクトップ開閉可能（220px⇔60px）。モバイルはSheet drawer
+  - **右パネル** (`HistoryPanel.tsx`): 会話履歴。Sheet drawerで表示。日付グループ分け（今日/昨日/過去7日/それ以前）
+  - **設定画面** (`SettingsView.tsx`): Google連携状態、GA4/GSC利用可能状態、プロパティ一覧、再連携ボタン
+  - **トップバー**: PropertySelector（チャット時）or 設定タイトル + 履歴ボタン
+  - 旧 `Sidebar.tsx` は未使用（会話リストは `HistoryPanel` に移行）
 
 ## Development Commands
 - Backend start: `cd backend && uv run uvicorn main:app --reload`
