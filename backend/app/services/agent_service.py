@@ -477,3 +477,47 @@ GA4 property_id: {property_id}
                 return properties
         finally:
             self.mcp_manager.credentials_manager.cleanup_path(creds_path)
+
+    async def list_gsc_properties(
+        self,
+        user_id: str,
+        refresh_token: str,
+    ) -> list[dict]:
+        mcp_server, creds_path = self.mcp_manager.create_gsc_server(
+            user_id, refresh_token
+        )
+
+        try:
+            async with mcp_server:
+                tools = await mcp_server.list_tools()
+                has_list_tool = any(t.name == "list_properties" for t in tools)
+                if not has_list_tool:
+                    return []
+
+                result = await mcp_server.call_tool("list_properties", {})
+                properties = []
+
+                if not result or not hasattr(result, "content"):
+                    return []
+
+                import re
+
+                for content_item in result.content:
+                    if not hasattr(content_item, "text"):
+                        continue
+                    # Parse markdown: - **{siteUrl}** (Permission: {level})
+                    for match in re.finditer(
+                        r"\*\*(.+?)\*\*\s*\(Permission:\s*(\w+)\)",
+                        content_item.text,
+                    ):
+                        properties.append(
+                            {
+                                "site_url": match.group(1),
+                                "permission_level": match.group(2),
+                            }
+                        )
+
+                print(f"[GSC Properties] Extracted {len(properties)} sites")
+                return properties
+        finally:
+            self.mcp_manager.credentials_manager.cleanup_path(creds_path)

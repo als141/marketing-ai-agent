@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, use } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AppSidebar, type DashboardView } from "../components/AppSidebar";
 import { HistoryPanel } from "../components/HistoryPanel";
 import { SettingsView } from "../components/SettingsView";
@@ -39,8 +39,10 @@ interface PageProps {
 export default function DashboardPage({ params }: PageProps) {
   const { slug } = use(params);
   const { getToken } = useAuth();
+  const router = useRouter();
   const searchParams = useSearchParams();
 
+  const isSettingsPage = slug?.[0] === "settings";
   const initialConversationId =
     slug?.[0] === "c" && slug[1] ? slug[1] : null;
 
@@ -49,7 +51,7 @@ export default function DashboardPage({ params }: PageProps) {
     useState<PropertySummary | null>(null);
   const [refreshSidebar, setRefreshSidebar] = useState(0);
   const [showConnectedBanner, setShowConnectedBanner] = useState(false);
-  const [currentView, setCurrentView] = useState<DashboardView>("chat");
+  const currentView: DashboardView = isSettingsPage ? "settings" : "chat";
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -126,9 +128,19 @@ export default function DashboardPage({ params }: PageProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialConversationId]);
 
+  const navigateTo = useCallback(
+    (view: DashboardView) => {
+      if (view === "settings") {
+        router.push("/dashboard/settings");
+      } else {
+        router.push("/dashboard");
+      }
+    },
+    [router]
+  );
+
   const handleSelectConversation = useCallback(
     async (conv: Conversation) => {
-      setCurrentView("chat");
       setConversationId(conv.id);
       window.history.replaceState({}, "", `/dashboard/c/${conv.id}`);
       try {
@@ -156,10 +168,9 @@ export default function DashboardPage({ params }: PageProps) {
 
   const handleNewConversation = useCallback(() => {
     clearMessages();
-    setCurrentView("chat");
-    window.history.replaceState({}, "", "/dashboard");
+    router.push("/dashboard");
     setRefreshSidebar((prev) => prev + 1);
-  }, [clearMessages]);
+  }, [clearMessages, router]);
 
   const handleSendMessage = useCallback(
     (content: string) => {
@@ -220,7 +231,7 @@ export default function DashboardPage({ params }: PageProps) {
       {/* Left sidebar: Desktop */}
       <AppSidebar
         currentView={currentView}
-        onViewChange={setCurrentView}
+        onViewChange={navigateTo}
         onNewConversation={handleNewConversation}
         collapsed={sidebarCollapsed}
         onCollapsedChange={setSidebarCollapsed}
@@ -248,7 +259,6 @@ export default function DashboardPage({ params }: PageProps) {
           <nav className="flex-1 py-3 px-3 space-y-1">
             <button
               onClick={() => {
-                setCurrentView("chat");
                 handleNewConversation();
                 setMobileMenuOpen(false);
               }}
@@ -260,7 +270,7 @@ export default function DashboardPage({ params }: PageProps) {
             <div className="h-px bg-[#f0f1f5] my-2" />
             <button
               onClick={() => {
-                setCurrentView("chat");
+                navigateTo("chat");
                 setMobileMenuOpen(false);
               }}
               className={`flex items-center gap-3 w-full px-3 h-10 rounded-lg transition-colors cursor-pointer ${
@@ -274,7 +284,7 @@ export default function DashboardPage({ params }: PageProps) {
             </button>
             <button
               onClick={() => {
-                setCurrentView("settings");
+                navigateTo("settings");
                 setMobileMenuOpen(false);
               }}
               className={`flex items-center gap-3 w-full px-3 h-10 rounded-lg transition-colors cursor-pointer ${
@@ -340,7 +350,7 @@ export default function DashboardPage({ params }: PageProps) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-hidden">
+        <div className={`flex-1 ${currentView === "chat" ? "overflow-hidden" : "overflow-y-auto"}`}>
           {currentView === "chat" ? (
             <ChatWindow
               messages={messages}

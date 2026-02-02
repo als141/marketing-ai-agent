@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { apiJson } from "@/lib/api";
-import type { PropertySummary, GoogleAuthStatus } from "@/lib/types";
+import type { PropertySummary, GscPropertySummary, GoogleAuthStatus } from "@/lib/types";
 import {
   CheckCircle2,
   XCircle,
@@ -79,24 +79,23 @@ export function SettingsView({ onReconnectGoogle }: Props) {
   const { getToken } = useAuth();
   const [googleStatus, setGoogleStatus] = useState<GoogleAuthStatus | null>(null);
   const [properties, setProperties] = useState<PropertySummary[]>([]);
+  const [gscProperties, setGscProperties] = useState<GscPropertySummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [gscAvailable, setGscAvailable] = useState<boolean | null>(null);
 
   const loadData = useCallback(async () => {
     try {
       const token = await getToken();
-      const [status, props] = await Promise.all([
+      const [status, props, gscProps] = await Promise.all([
         apiJson<GoogleAuthStatus>("/api/auth/google-status", token),
         apiJson<PropertySummary[]>("/api/properties", token).catch(() => []),
+        apiJson<GscPropertySummary[]>("/api/properties/gsc", token).catch((e) => {
+          console.error("Failed to load GSC properties:", e);
+          return [];
+        }),
       ]);
       setGoogleStatus(status);
       setProperties(props);
-
-      // Check GSC availability by trying to list GSC properties
-      // If the user has GSC access, this will succeed
-      if (status.connected) {
-        setGscAvailable(true); // Assume available if Google is connected
-      }
+      setGscProperties(gscProps);
     } catch (err) {
       console.error("Failed to load settings data:", err);
     } finally {
@@ -235,8 +234,8 @@ export function SettingsView({ onReconnectGoogle }: Props) {
                 </div>
               </div>
               <StatusBadge
-                ok={gscAvailable ?? false}
-                label={gscAvailable ? "利用可能" : "未検出"}
+                ok={gscProperties.length > 0}
+                label={gscProperties.length > 0 ? "利用可能" : "未検出"}
               />
             </div>
 
@@ -268,6 +267,34 @@ export function SettingsView({ onReconnectGoogle }: Props) {
                     </p>
                     <p className="text-[10px] text-[#9ca3af] truncate">
                       {prop.account_name} · {prop.property_id}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </SettingCard>
+        )}
+
+        {/* GSC Properties */}
+        {gscProperties.length > 0 && (
+          <SettingCard
+            icon={<Search className="w-4 h-4 text-[#d97706]" />}
+            title="Search Console プロパティ"
+            description={`${gscProperties.length}件のサイトにアクセス可能`}
+          >
+            <div className="space-y-2">
+              {gscProperties.map((site) => (
+                <div
+                  key={site.site_url}
+                  className="flex items-center gap-3 py-2 px-3 rounded-lg bg-[#f8f9fb]"
+                >
+                  <Search className="w-3.5 h-3.5 text-[#9ca3af] shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-[#1a1a2e] truncate">
+                      {site.site_url}
+                    </p>
+                    <p className="text-[10px] text-[#9ca3af] truncate">
+                      {site.permission_level}
                     </p>
                   </div>
                 </div>

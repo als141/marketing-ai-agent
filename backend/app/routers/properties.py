@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.middleware.auth_middleware import get_current_user
 from app.deps import get_supabase, get_agent_service
 from app.services.supabase_service import get_or_create_user, get_user_google_token
-from app.models.schemas import PropertySelectRequest, PropertySummary
+from app.models.schemas import PropertySelectRequest, PropertySummary, GscPropertySummary
 
 router = APIRouter(prefix="/api/properties", tags=["properties"])
 
@@ -24,6 +24,24 @@ async def list_properties(
     except Exception as e:
         print(f"[Properties] Error listing properties: {e}")
         raise HTTPException(status_code=502, detail=f"MCP server error: {e}")
+
+
+@router.get("/gsc", response_model=list[GscPropertySummary])
+async def list_gsc_properties(
+    user: dict = Depends(get_current_user),
+):
+    supabase = get_supabase()
+    refresh_token = await get_user_google_token(supabase, user["clerk_id"])
+    if not refresh_token:
+        raise HTTPException(status_code=400, detail="Google account not connected")
+
+    agent_service = get_agent_service()
+    try:
+        sites = await agent_service.list_gsc_properties(user["clerk_id"], refresh_token)
+        return [GscPropertySummary(**s) for s in sites]
+    except Exception as e:
+        print(f"[GSC Properties] Error listing properties: {e}")
+        raise HTTPException(status_code=502, detail=f"GSC MCP server error: {e}")
 
 
 @router.post("/select")

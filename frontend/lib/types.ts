@@ -83,6 +83,11 @@ export interface PropertySummary {
   account_name: string;
 }
 
+export interface GscPropertySummary {
+  site_url: string;
+  permission_level: string;
+}
+
 export interface GoogleAuthStatus {
   connected: boolean;
   email?: string;

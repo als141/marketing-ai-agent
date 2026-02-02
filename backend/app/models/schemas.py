@@ -41,6 +41,11 @@ class PropertySummary(BaseModel):
     account_name: str
 
 
+class GscPropertySummary(BaseModel):
+    site_url: str
+    permission_level: str
+
+
 class ConversationSummary(BaseModel):
     id: str
     title: str
