@@ -8,9 +8,11 @@ import type {
   ActivityItem,
   ToolActivityItem,
   AskUserActivityItem,
+  ChartActivityItem,
   PendingQuestionGroup,
 } from "@/lib/types";
 import { AskUserPrompt } from "./AskUserPrompt";
+import { ChartRenderer } from "./charts/ChartRenderer";
 import { Wrench, Loader2, BarChart3, Search, Database, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
@@ -60,6 +62,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_custom_dimensions_and_metrics: "カスタム定義",
   list_google_ads_links: "広告リンク",
   get_sitemaps: "サイトマップ",
+  render_chart: "チャート描画",
   get_site_details: "サイト情報",
   submit_sitemap: "サイトマップ送信",
   delete_sitemap: "サイトマップ削除",
@@ -70,7 +73,7 @@ const TOOL_LABELS: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 interface ItemGroup {
-  kind: "reasoning" | "tool" | "ask_user";
+  kind: "reasoning" | "tool" | "ask_user" | "chart";
   items: ActivityItem[];
 }
 
@@ -185,6 +188,18 @@ function TimelineContent({
             </div>
           );
         }
+        if (group.kind === "chart") {
+          return (
+            <div key={`c-${gi}`} className="space-y-2">
+              {group.items.map((item) => (
+                <ChartRenderer
+                  key={item.id}
+                  spec={(item as ChartActivityItem).spec}
+                />
+              ))}
+            </div>
+          );
+        }
         return (
           <div key={`t-${gi}`} className="flex flex-wrap gap-1 sm:gap-1.5">
             {group.items.map((item) => (
@@ -229,10 +244,13 @@ function ActivityTimeline({
     );
   }
 
-  // --- Completed: collapsible summary ---
-  const toolCount = items.filter((it) => it.kind === "tool").length;
-  const reasoningCount = items.filter((it) => it.kind === "reasoning").length;
-  const askCount = items.filter((it) => it.kind === "ask_user").length;
+  // --- Completed: charts always visible, rest in collapsible summary ---
+  const chartItems = items.filter((it) => it.kind === "chart");
+  const nonChartItems = items.filter((it) => it.kind !== "chart");
+
+  const toolCount = nonChartItems.filter((it) => it.kind === "tool").length;
+  const reasoningCount = nonChartItems.filter((it) => it.kind === "reasoning").length;
+  const askCount = nonChartItems.filter((it) => it.kind === "ask_user").length;
 
   const parts: string[] = [];
   if (reasoningCount > 0) parts.push(`思考 ${reasoningCount}`);
@@ -242,21 +260,37 @@ function ActivityTimeline({
 
   return (
     <div className="mb-2.5 sm:mb-3">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="group inline-flex items-center gap-1 text-[11px] text-[#b0b5bd] hover:text-[#6b7280] transition-colors cursor-pointer"
-      >
-        <ChevronRight
-          className={`w-2.5 h-2.5 transition-transform duration-150 ${
-            isOpen ? "rotate-90" : ""
-          }`}
-        />
-        <span className="tracking-wide">{summaryLabel}</span>
-      </button>
-      {isOpen && (
-        <div className="mt-1.5 ml-[14px] border-l border-[#e5e7eb] pl-2.5">
-          <TimelineContent items={items} />
+      {/* Charts are always visible */}
+      {chartItems.length > 0 && (
+        <div className="space-y-2 mb-2">
+          {chartItems.map((item) => (
+            <ChartRenderer
+              key={item.id}
+              spec={(item as ChartActivityItem).spec}
+            />
+          ))}
         </div>
+      )}
+      {/* Non-chart items in collapsible */}
+      {nonChartItems.length > 0 && summaryLabel && (
+        <>
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="group inline-flex items-center gap-1 text-[11px] text-[#b0b5bd] hover:text-[#6b7280] transition-colors cursor-pointer"
+          >
+            <ChevronRight
+              className={`w-2.5 h-2.5 transition-transform duration-150 ${
+                isOpen ? "rotate-90" : ""
+              }`}
+            />
+            <span className="tracking-wide">{summaryLabel}</span>
+          </button>
+          {isOpen && (
+            <div className="mt-1.5 ml-[14px] border-l border-[#e5e7eb] pl-2.5">
+              <TimelineContent items={nonChartItems} />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

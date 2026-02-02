@@ -8,6 +8,7 @@ import type {
   StreamEvent,
   ToolActivityItem,
   AskUserActivityItem,
+  ChartActivityItem,
   PendingQuestionGroup,
 } from "@/lib/types";
 
@@ -270,6 +271,27 @@ export function useChat(propertyId: string) {
                 groupId: event.group_id,
                 questions: event.questions,
               });
+            } else if (event.type === "chart" && event.spec) {
+              const seq = ++seqRef.current;
+              const chartItem: ChartActivityItem = {
+                id: crypto.randomUUID(),
+                kind: "chart",
+                sequence: seq,
+                spec: event.spec,
+              };
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? {
+                        ...m,
+                        activityItems: [
+                          ...(m.activityItems || []),
+                          chartItem,
+                        ],
+                      }
+                    : m
+                )
+              );
             } else if (event.type === "done") {
               if (event.conversation_id) {
                 setCurrentConversationId(event.conversation_id);

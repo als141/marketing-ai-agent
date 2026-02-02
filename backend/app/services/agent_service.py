@@ -111,6 +111,51 @@ async def ask_user(
     return "\n".join(parts)
 
 
+@function_tool
+async def render_chart(
+    ctx: ToolContext[ChatContext],
+    chart_spec: str,
+) -> str:
+    """チャットUIにインタラクティブなチャートを描画する。
+
+    Args:
+        chart_spec: チャート仕様のJSON文字列。以下のフォーマット:
+            {
+                "type": "line|bar|area|pie|donut|scatter|radar|funnel|table",
+                "title": "チャートタイトル",
+                "description": "補足説明（任意）",
+                "data": [{"label": "値1", "metric": 100}, ...],
+                "xKey": "X軸のキー名（line/bar/area/scatter用）",
+                "yKeys": [{"key": "metric", "label": "表示名", "color": "#3b82f6"}],
+                "nameKey": "名前キー（pie/donut用）",
+                "valueKey": "値キー（pie/donut用）",
+                "columns": [{"key": "col", "label": "列名", "align": "left|right|center"}],
+                "categories": ["カテゴリ1", ...],
+                "nameField": "名前フィールド（funnel用）",
+                "valueField": "値フィールド（funnel用）"
+            }
+            - type="line": 時系列トレンド。xKey + yKeys 必須
+            - type="bar": カテゴリ比較。xKey + yKeys 必須
+            - type="area": 累積/スタックエリア。xKey + yKeys 必須
+            - type="pie"/"donut": 構成比。nameKey + valueKey 必須
+            - type="scatter": 散布図。xKey + yKeys 必須（yKeys[0]がY軸）
+            - type="radar": レーダーチャート。xKey + yKeys 必須
+            - type="funnel": ファネル。nameField + valueField 必須
+            - type="table": テーブル表示。columns 必須
+            - data配列の数値は文字列ではなく数値型で入れること
+    """
+    try:
+        spec = json.loads(chart_spec)
+    except json.JSONDecodeError:
+        return "（チャート仕様のJSON解析に失敗しました）"
+
+    if not isinstance(spec, dict) or "type" not in spec or "data" not in spec:
+        return "（チャート仕様に type と data が必要です）"
+
+    await ctx.context.emit_event({"type": "chart", "spec": spec})
+    return f"チャート「{spec.get('title', '')}」を描画しました。"
+
+
 class AgentService:
     def __init__(self, mcp_manager: MCPSessionManager):
         self.mcp_manager = mcp_manager
@@ -204,10 +249,37 @@ GA4 property_id: {property_id}
 | リアルタイム状況 | GA4: run_realtime_report |
 | サイトマップ確認 | GSC: get_sitemaps |
 
+## チャート描画ルール（render_chart ツール）
+- データ取得後、視覚化が有効と判断したら **必ず `render_chart` ツールを呼んでチャートを描画せよ**。
+- テキスト分析も併記すること（チャートだけ投げるな）。
+- チャートの `data` 配列の数値は **数値型**（文字列ではなく `100` や `3.5`）で入れること。
+- ラベルは日本語を使用。
+- 使い分け:
+  | データの特性 | type |
+  |---|---|
+  | 日別・月別の推移 | line |
+  | カテゴリ間の比較 | bar |
+  | 累積推移・内訳推移 | area |
+  | 構成比・シェア | pie または donut |
+  | 2変数の相関 | scatter |
+  | 多次元の比較 | radar |
+  | ステップごとの変換率 | funnel |
+  | 詳細データ一覧 | table |
+- **1回の分析で複数チャートを出してよい**（例: 推移のlineと内訳のpieをセットで）。
+- chart_spec例（折れ線）:
+  ```json
+  {{"type":"line","title":"日別セッション数","data":[{{"date":"1/1","sessions":150}},{{"date":"1/2","sessions":200}}],"xKey":"date","yKeys":[{{"key":"sessions","label":"セッション","color":"#3b82f6"}}]}}
+  ```
+- chart_spec例（円グラフ）:
+  ```json
+  {{"type":"pie","title":"デバイス構成比","data":[{{"device":"desktop","count":500}},{{"device":"mobile","count":300}},{{"device":"tablet","count":50}}],"nameKey":"device","valueKey":"count"}}
+  ```
+
 ## 回答フォーマット
-- 数値データは**マークダウンテーブル**で表示。
+- 数値データは**チャート + 簡潔なインサイト**で表示。チャートがある場合はマークダウンテーブルは不要。
+- チャートなしの場合はマークダウンテーブルを使え。
 - 数値は3桁カンマ区切り、パーセントは小数点1桁。
-- テーブルの後に**2〜3行のインサイト**（増減の要因推定、改善示唆など）を簡潔に付けろ。
+- **2〜3行のインサイト**（増減の要因推定、改善示唆など）を簡潔に付けろ。
 - ユーザーと同じ言語で応答（主に日本語）。
 
 ## やってはいけないこと
@@ -251,7 +323,7 @@ GA4 property_id: {property_id}
                     instructions=self._build_system_prompt(property_id),
                     model="gpt-5.2",
                     mcp_servers=[pair.ga4_server, pair.gsc_server],
-                    tools=[ask_user],
+                    tools=[ask_user, render_chart],
                     model_settings=ModelSettings(
                         reasoning=Reasoning(effort="medium", summary="detailed"),
                         verbosity="low",

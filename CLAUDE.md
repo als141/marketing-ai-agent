@@ -169,6 +169,30 @@ frontend/  - Next.js 16 + React 19 + bun
   - SDK内ソース（デフォルト設定）: `backend/.venv/lib/python3.12/site-packages/agents/models/default_models.py`
   - SDK内ソース（ModelSettings定義）: `backend/.venv/lib/python3.12/site-packages/agents/model_settings.py`
 
+## チャート・ビジュアライゼーション機能（render_chart ツール）
+- AIエージェントがGA4/GSCデータ取得後、自動的にチャートを生成してチャットUI内にインラインで表示する機能
+- **アーキテクチャ**: `@function_tool` + `ToolContext[ChatContext].emit_event()` + SSE `chart` イベント + Recharts
+  - `render_chart` ツール: `chart_spec` パラメータ（JSON文字列）でチャート仕様を受け取る
+  - `emit_event({"type": "chart", "spec": {...}})` でフロントに送信（ask_userと同パターン）
+  - フロントエンドでRechartsを使ってレンダリング
+- **チャートタイプ**: line（折れ線）、bar（棒）、area（エリア）、pie（円）、donut（ドーナツ）、scatter（散布図）、radar（レーダー）、funnel（ファネル）、table（テーブル）
+- **チャートSpec型**: `ChartSpec` — type, title, description, data, xKey, yKeys, nameKey, valueKey, columns, categories, nameField, valueField
+- **表示ルール**:
+  - ストリーミング中: ActivityTimeline内にインライン表示（到着次第即座に描画）
+  - 完了後: チャートは折りたたみ外に常時表示、思考・ツールバッジのみ折りたたみ内
+- **技術スタック**: Recharts + shadcn/ui Chart (`ChartContainer`, `ChartConfig`)
+  - `bunx shadcn@latest add chart` でインストール済み
+- **カラーパレット**: #3b82f6, #10b981, #f59e0b, #ef4444, #8b5cf6, #ec4899, #06b6d4, #f97316, #14b8a6, #a855f7
+- **実装ファイル**:
+  - バックエンド: `backend/app/services/agent_service.py` — `render_chart` function_tool + システムプロンプトにチャートルール追加
+  - フロントエンド型: `frontend/lib/types.ts` — `ChartSpec`, `ChartActivityItem`
+  - SSEハンドリング: `frontend/lib/hooks/useChat.ts` — `chart` イベント → `ChartActivityItem` を activityItems に追加
+  - チャートコンポーネント: `frontend/app/dashboard/components/charts/`
+    - `ChartRenderer.tsx` — ディスパッチャ（type→コンポーネント）
+    - `LineChartView.tsx`, `BarChartView.tsx`, `AreaChartView.tsx`, `PieChartView.tsx`, `ScatterChartView.tsx`, `RadarChartView.tsx`, `FunnelChartView.tsx`, `TableChartView.tsx`
+    - `chart-colors.ts` — カラーパレット + formatNumber ヘルパー
+  - 統合: `frontend/app/dashboard/components/ChatMessage.tsx` — ActivityTimeline内でkind==="chart"時にChartRenderer表示
+
 ## Ask-User ツール（エージェントからユーザーへの構造化質問・確認機能）
 - AIエージェントがチャット中にユーザーへ**構造化された複数の質問**を一括送信し、全回答をまとめて受け取ってから処理を続行する機能
 - **アーキテクチャ**: `@function_tool` + `ToolContext[ChatContext]` + `asyncio.Event` + `asyncio.Queue`

@@ -33,10 +33,61 @@ export interface AskUserActivityItem {
   responses?: Record<string, string>; // {question_id: answer}, undefined=待機中
 }
 
+// --- Chart Visualization ---
+
+export interface ChartYKey {
+  key: string;
+  label: string;
+  color?: string;
+}
+
+export interface ChartColumn {
+  key: string;
+  label: string;
+  align?: "left" | "right" | "center";
+}
+
+export interface ChartSpec {
+  type:
+    | "line"
+    | "bar"
+    | "area"
+    | "pie"
+    | "donut"
+    | "scatter"
+    | "radar"
+    | "funnel"
+    | "table";
+  title?: string;
+  description?: string;
+  data: Record<string, unknown>[];
+  // line/bar/area/scatter
+  xKey?: string;
+  yKeys?: ChartYKey[];
+  // pie/donut
+  nameKey?: string;
+  valueKey?: string;
+  // table
+  columns?: ChartColumn[];
+  // radar
+  categories?: string[];
+  // funnel
+  nameField?: string;
+  valueField?: string;
+}
+
+export interface ChartActivityItem {
+  id: string;
+  kind: "chart";
+  sequence: number;
+  spec: ChartSpec;
+}
+
 export type ActivityItem =
   | ReasoningActivityItem
   | ToolActivityItem
-  | AskUserActivityItem;
+  | AskUserActivityItem
+  | ChartActivityItem;
 
 // --- Message ---
 
@@ -100,6 +151,7 @@ export interface StreamEvent {
     | "tool_result"
     | "reasoning"
     | "ask_user"
+    | "chart"
     | "done"
     | "error"
     | "response_created";
@@ -114,6 +166,8 @@ export interface StreamEvent {
   // ask_user fields (structured multi-question)
   group_id?: string;
   questions?: AskUserQuestionItem[];
+  // chart fields
+  spec?: ChartSpec;
 }
 
 export interface PendingQuestionGroup {
