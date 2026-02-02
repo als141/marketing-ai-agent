@@ -130,15 +130,19 @@ frontend/  - Next.js 16 + React 19 + bun
 - バックエンドで`ReasoningItem`を検出し、`item.raw_item.summary`からテキストを抽出
 - 英語のサマリは`gpt-5-nano`（`REASONING_TRANSLATE_MODEL`環境変数で変更可）+ `effort="minimal"` で日本語に翻訳（~111トークン/回、推論トークン0）
 - SSEで`{"type": "reasoning", "content": "日本語サマリ", "has_summary": true}`として送信
-- フロントエンドでは:
-  - ストリーミング中: 最新の思考内容を紫の`Sparkles`アイコン付きでリアルタイム表示
-  - 完了後: 「思考過程 (N)」として折りたたみ表示（クリックで展開）
-  - 表示位置: ツールバッジの上（アシスタントメッセージの最上部）
+- フロントエンドでは **統合ActivityTimeline** で表示:
+  - `activityItems: ActivityItem[]` — reasoning と tool call を到着順に単一配列で保持
+  - `ActivityItem` = `ReasoningActivityItem | ToolActivityItem`（`kind` で判別）
+  - ストリーミング中: 思考→ツール→思考→ツールの流れをそのまま時系列表示（連続する同種アイテムをグループ化）
+  - 完了後: 「▸ 思考 N · ツール M」の折りたたみトグル（展開でタイムライン表示）
+  - reasoningはReactMarkdown + remarkGfmでレンダリング（11px灰色テキスト）
+  - ツールバッジは既存スタイル維持（緑完了/灰色実行中）
+  - `toolCalls[]` と `reasoningMessages[]` は後方互換のため並行して保持
 - **実装ファイル**:
-  - バックエンド: `backend/app/services/agent_service.py`（`ReasoningItem`処理 + `_translate_to_japanese()`）
-  - フロントエンド: `frontend/app/dashboard/components/ChatMessage.tsx`（`ReasoningSummary`コンポーネント）
-  - 型定義: `frontend/lib/types.ts`（`Message.reasoningMessages`, `StreamEvent.reasoning`）
-  - Hook: `frontend/lib/hooks/useChat.ts`（`reasoning`イベントハンドリング）
+  - バックエンド: `backend/app/services/agent_service.py`（`ReasoningItem`処理 + `_translate_to_japanese()` + `call_id`送信）
+  - フロントエンド: `frontend/app/dashboard/components/ChatMessage.tsx`（`ActivityTimeline`コンポーネント）
+  - 型定義: `frontend/lib/types.ts`（`ActivityItem`, `ReasoningActivityItem`, `ToolActivityItem`, `Message.activityItems`）
+  - Hook: `frontend/lib/hooks/useChat.ts`（統合`activityItems`イベントハンドリング + `call_id`マッチング）
 - **情報ソース**:
   - OpenAI Agents SDK ドキュメント: https://openai.github.io/openai-agents-python/models/
   - GPT-5.2 モデルページ: https://platform.openai.com/docs/models/gpt-5.2

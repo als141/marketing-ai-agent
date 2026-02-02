@@ -2,7 +2,12 @@
 
 import { useState, useCallback, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
-import type { Message, ToolCall, StreamEvent } from "@/lib/types";
+import type {
+  Message,
+  ToolCall,
+  StreamEvent,
+  ToolActivityItem,
+} from "@/lib/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -14,6 +19,7 @@ export function useChat(propertyId: string) {
   >(null);
   const { getToken } = useAuth();
   const abortRef = useRef<AbortController | null>(null);
+  const seqRef = useRef(0);
 
   const loadMessages = useCallback((msgs: Message[]) => {
     setMessages(msgs);
@@ -25,6 +31,8 @@ export function useChat(propertyId: string) {
 
   const sendMessage = useCallback(
     async (content: string) => {
+      seqRef.current = 0;
+
       const userMsg: Message = {
         id: crypto.randomUUID(),
         role: "user",
@@ -41,6 +49,7 @@ export function useChat(propertyId: string) {
           role: "assistant",
           content: "",
           isStreaming: true,
+          activityItems: [],
           toolCalls: [],
           reasoningMessages: [],
         },
@@ -98,6 +107,7 @@ export function useChat(propertyId: string) {
                 )
               );
             } else if (event.type === "tool_call") {
+              const seq = ++seqRef.current;
               const tc: ToolCall = {
                 type: "call",
                 call_id: event.call_id,
@@ -107,7 +117,22 @@ export function useChat(propertyId: string) {
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
-                    ? { ...m, toolCalls: [...(m.toolCalls || []), tc] }
+                    ? {
+                        ...m,
+                        activityItems: [
+                          ...(m.activityItems || []),
+                          {
+                            id: crypto.randomUUID(),
+                            kind: "tool" as const,
+                            sequence: seq,
+                            name: event.name || "unknown",
+                            call_id: event.call_id,
+                            arguments: event.arguments,
+                            output: undefined,
+                          },
+                        ],
+                        toolCalls: [...(m.toolCalls || []), tc],
+                      }
                     : m
                 )
               );
@@ -115,31 +140,59 @@ export function useChat(propertyId: string) {
               setMessages((prev) =>
                 prev.map((m) => {
                   if (m.id !== assistantId) return m;
-                  const calls = [...(m.toolCalls || [])];
-                  // call_idでマッチング
-                  if (event.call_id) {
-                    const idx = calls.findIndex(
-                      (c) => c.call_id === event.call_id && !c.output
-                    );
-                    if (idx !== -1) {
-                      calls[idx] = { ...calls[idx], output: event.output };
-                    }
-                  } else {
-                    // call_idがない場合はoutputが未設定の最初のツールに割り当て
-                    const idx = calls.findIndex((c) => !c.output);
-                    if (idx !== -1) {
-                      calls[idx] = { ...calls[idx], output: event.output };
-                    }
+
+                  // activityItems: call_idでマッチング
+                  const items = [...(m.activityItems || [])];
+                  const aidx = event.call_id
+                    ? items.findIndex(
+                        (it) =>
+                          it.kind === "tool" &&
+                          (it as ToolActivityItem).call_id ===
+                            event.call_id &&
+                          !(it as ToolActivityItem).output
+                      )
+                    : items.findIndex(
+                        (it) =>
+                          it.kind === "tool" &&
+                          !(it as ToolActivityItem).output
+                      );
+                  if (aidx !== -1) {
+                    items[aidx] = {
+                      ...items[aidx],
+                      output: event.output,
+                    } as ToolActivityItem;
                   }
-                  return { ...m, toolCalls: calls };
+
+                  // toolCalls: call_idでマッチング (backward compat)
+                  const calls = [...(m.toolCalls || [])];
+                  const cidx = event.call_id
+                    ? calls.findIndex(
+                        (c) => c.call_id === event.call_id && !c.output
+                      )
+                    : calls.findIndex((c) => !c.output);
+                  if (cidx !== -1) {
+                    calls[cidx] = { ...calls[cidx], output: event.output };
+                  }
+
+                  return { ...m, activityItems: items, toolCalls: calls };
                 })
               );
             } else if (event.type === "reasoning" && event.content) {
+              const seq = ++seqRef.current;
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
                     ? {
                         ...m,
+                        activityItems: [
+                          ...(m.activityItems || []),
+                          {
+                            id: crypto.randomUUID(),
+                            kind: "reasoning" as const,
+                            sequence: seq,
+                            content: event.content!,
+                          },
+                        ],
                         reasoningMessages: [
                           ...(m.reasoningMessages || []),
                           event.content!,
@@ -151,7 +204,6 @@ export function useChat(propertyId: string) {
             } else if (event.type === "done") {
               if (event.conversation_id) {
                 setCurrentConversationId(event.conversation_id);
-                // Update URL seamlessly without reload
                 window.history.replaceState(
                   {},
                   "",
@@ -161,11 +213,21 @@ export function useChat(propertyId: string) {
               setMessages((prev) =>
                 prev.map((m) => {
                   if (m.id !== assistantId) return m;
-                  // ストリーム完了: 未完了のツールを全て完了扱いにする
+                  // 未完了ツールを全て完了扱い
+                  const items = (m.activityItems || []).map((it) =>
+                    it.kind === "tool" && !(it as ToolActivityItem).output
+                      ? ({ ...it, output: "(completed)" } as ToolActivityItem)
+                      : it
+                  );
                   const calls = (m.toolCalls || []).map((tc) =>
                     tc.output ? tc : { ...tc, output: "(completed)" }
                   );
-                  return { ...m, isStreaming: false, toolCalls: calls };
+                  return {
+                    ...m,
+                    isStreaming: false,
+                    activityItems: items,
+                    toolCalls: calls,
+                  };
                 })
               );
             } else if (event.type === "error") {

@@ -3,13 +3,17 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
-import type { Message } from "@/lib/types";
+import type { Message, ActivityItem, ToolActivityItem } from "@/lib/types";
 import { Wrench, Loader2, BarChart3, Search, Database, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
 interface Props {
   message: Message;
 }
+
+// ---------------------------------------------------------------------------
+// Tool metadata maps
+// ---------------------------------------------------------------------------
 
 const TOOL_ICONS: Record<string, typeof BarChart3> = {
   run_report: BarChart3,
@@ -52,41 +56,166 @@ const TOOL_LABELS: Record<string, string> = {
   delete_sitemap: "サイトマップ削除",
 };
 
-function ToolCallBadges({ toolCalls }: { toolCalls: Message["toolCalls"] }) {
-  if (!toolCalls || toolCalls.length === 0) return null;
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+interface ItemGroup {
+  kind: "reasoning" | "tool";
+  items: ActivityItem[];
+}
+
+function groupConsecutive(items: ActivityItem[]): ItemGroup[] {
+  const groups: ItemGroup[] = [];
+  for (const item of items) {
+    const last = groups[groups.length - 1];
+    if (last && last.kind === item.kind) {
+      last.items.push(item);
+    } else {
+      groups.push({ kind: item.kind, items: [item] });
+    }
+  }
+  return groups;
+}
+
+// ---------------------------------------------------------------------------
+// ToolBadge — single tool indicator
+// ---------------------------------------------------------------------------
+
+function ToolBadge({ item }: { item: ToolActivityItem }) {
+  const Icon = TOOL_ICONS[item.name] || Wrench;
+  const label = TOOL_LABELS[item.name] || item.name;
+  const isDone = !!item.output;
 
   return (
-    <div className="flex flex-wrap gap-1 sm:gap-1.5 mb-3 sm:mb-4">
-      {toolCalls.map((tc, i) => {
-        const Icon = TOOL_ICONS[tc.name] || Wrench;
-        const label = TOOL_LABELS[tc.name] || tc.name;
-        const isDone = !!tc.output;
+    <div
+      className={`
+        inline-flex items-center gap-1 sm:gap-1.5 rounded-md px-2 sm:px-2.5 py-0.5 sm:py-1 text-[11px] sm:text-xs
+        transition-all duration-300
+        ${isDone
+          ? "bg-[#ecfdf5] text-[#065f46] border border-[#a7f3d0]"
+          : "bg-[#f0f1f5] text-[#6b7280] border border-[#e5e7eb]"
+        }
+      `}
+    >
+      <Icon className="w-3 h-3 shrink-0" />
+      <span className="font-medium">{label}</span>
+      {isDone ? (
+        <span className="text-[#10b981] font-semibold">&#10003;</span>
+      ) : (
+        <Loader2 className="w-3 h-3 animate-spin" />
+      )}
+    </div>
+  );
+}
 
+// ---------------------------------------------------------------------------
+// ReasoningLine — single reasoning entry
+// ---------------------------------------------------------------------------
+
+function ReasoningLine({ content }: { content: string }) {
+  return (
+    <div className="flex items-start gap-2 min-w-0">
+      <span className="shrink-0 mt-[5px] w-[3px] h-[3px] rounded-full bg-[#c0c4cc]" />
+      <div className="min-w-0 text-[11px] text-[#9ca3af] leading-relaxed [&_p]:my-0.5 [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:text-[11px] [&_li]:text-[#9ca3af] [&_strong]:text-[#7f8694] [&_*]:text-[11px] [&_p]:last:mb-0">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// TimelineContent — renders the interleaved item groups
+// ---------------------------------------------------------------------------
+
+function TimelineContent({ items }: { items: ActivityItem[] }) {
+  const groups = groupConsecutive(items);
+
+  return (
+    <div className="space-y-1.5">
+      {groups.map((group, gi) => {
+        if (group.kind === "reasoning") {
+          return (
+            <div key={`r-${gi}`} className="space-y-1">
+              {group.items.map((item) => (
+                <ReasoningLine
+                  key={item.id}
+                  content={(item as { content: string }).content}
+                />
+              ))}
+            </div>
+          );
+        }
         return (
-          <div
-            key={i}
-            className={`
-              inline-flex items-center gap-1 sm:gap-1.5 rounded-md px-2 sm:px-2.5 py-0.5 sm:py-1 text-[11px] sm:text-xs
-              transition-all duration-300
-              ${isDone
-                ? "bg-[#ecfdf5] text-[#065f46] border border-[#a7f3d0]"
-                : "bg-[#f0f1f5] text-[#6b7280] border border-[#e5e7eb]"
-              }
-            `}
-          >
-            <Icon className="w-3 h-3 shrink-0" />
-            <span className="font-medium">{label}</span>
-            {isDone ? (
-              <span className="text-[#10b981] font-semibold">&#10003;</span>
-            ) : (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            )}
+          <div key={`t-${gi}`} className="flex flex-wrap gap-1 sm:gap-1.5">
+            {group.items.map((item) => (
+              <ToolBadge key={item.id} item={item as ToolActivityItem} />
+            ))}
           </div>
         );
       })}
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// ActivityTimeline — unified component
+// ---------------------------------------------------------------------------
+
+function ActivityTimeline({
+  items,
+  isStreaming,
+}: {
+  items: ActivityItem[];
+  isStreaming?: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  if (!items || items.length === 0) return null;
+
+  // --- Streaming: show full interleaved timeline ---
+  if (isStreaming) {
+    return (
+      <div className="mb-2.5 sm:mb-3">
+        <TimelineContent items={items} />
+      </div>
+    );
+  }
+
+  // --- Completed: collapsible summary ---
+  const toolCount = items.filter((it) => it.kind === "tool").length;
+  const reasoningCount = items.filter((it) => it.kind === "reasoning").length;
+
+  const parts: string[] = [];
+  if (reasoningCount > 0) parts.push(`思考 ${reasoningCount}`);
+  if (toolCount > 0) parts.push(`ツール ${toolCount}`);
+  const summaryLabel = parts.join(" · ");
+
+  return (
+    <div className="mb-2.5 sm:mb-3">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="group inline-flex items-center gap-1 text-[11px] text-[#b0b5bd] hover:text-[#6b7280] transition-colors cursor-pointer"
+      >
+        <ChevronRight
+          className={`w-2.5 h-2.5 transition-transform duration-150 ${
+            isOpen ? "rotate-90" : ""
+          }`}
+        />
+        <span className="tracking-wide">{summaryLabel}</span>
+      </button>
+      {isOpen && (
+        <div className="mt-1.5 ml-[14px] border-l border-[#e5e7eb] pl-2.5">
+          <TimelineContent items={items} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// UserMessage
+// ---------------------------------------------------------------------------
 
 function UserMessage({ message }: { message: Message }) {
   return (
@@ -100,77 +229,17 @@ function UserMessage({ message }: { message: Message }) {
   );
 }
 
-function ReasoningSummary({
-  messages,
-  isStreaming,
-}: {
-  messages: string[];
-  isStreaming?: boolean;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  if (!messages || messages.length === 0) return null;
-
-  // ストリーミング中: 最新の思考内容を薄く表示
-  if (isStreaming) {
-    const latest = messages[messages.length - 1];
-    return (
-      <div className="mb-2.5 sm:mb-3">
-        <div className="flex items-start gap-2">
-          <span className="shrink-0 mt-[3px] w-[3px] h-[3px] rounded-full bg-[#9ca3af] animate-pulse" />
-          <div className="reasoning-markdown text-[11px] text-[#9ca3af] leading-relaxed tracking-[0.01em] [&_p]:my-0.5 [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:text-[11px] [&_li]:text-[#9ca3af] [&_strong]:text-[#7f8694] [&_*]:text-[11px]">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {latest}
-            </ReactMarkdown>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 完了後: 折りたたみ式のトレースログ
-  return (
-    <div className="mb-2.5 sm:mb-3">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="group inline-flex items-center gap-1 text-[11px] text-[#b0b5bd] hover:text-[#6b7280] transition-colors cursor-pointer"
-      >
-        <ChevronRight
-          className={`w-2.5 h-2.5 transition-transform duration-150 ${
-            isOpen ? "rotate-90" : ""
-          }`}
-        />
-        <span className="tracking-wide">
-          思考過程
-        </span>
-        <span className="opacity-60 tabular-nums">{messages.length}</span>
-      </button>
-      {isOpen && (
-        <div className="mt-1.5 ml-[14px] space-y-1.5 border-l border-[#e5e7eb] pl-2.5">
-          {messages.map((msg, i) => (
-            <div
-              key={i}
-              className="reasoning-markdown text-[11px] text-[#9ca3af] leading-relaxed [&_p]:my-0.5 [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:text-[11px] [&_li]:text-[#9ca3af] [&_strong]:text-[#7f8694] [&_*]:text-[11px]"
-            >
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {msg}
-              </ReactMarkdown>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+// ---------------------------------------------------------------------------
+// AssistantMessage
+// ---------------------------------------------------------------------------
 
 function AssistantMessage({ message }: { message: Message }) {
   return (
     <div className="assistant-response overflow-hidden min-w-0">
-      <ReasoningSummary
-        messages={message.reasoningMessages || []}
+      <ActivityTimeline
+        items={message.activityItems || []}
         isStreaming={message.isStreaming}
       />
-      <ToolCallBadges toolCalls={message.toolCalls} />
 
       <div className="report-content overflow-hidden min-w-0">
         <ReactMarkdown
@@ -293,6 +362,10 @@ function AssistantMessage({ message }: { message: Message }) {
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Export
+// ---------------------------------------------------------------------------
 
 export function ChatMessage({ message }: Props) {
   if (message.role === "user") {

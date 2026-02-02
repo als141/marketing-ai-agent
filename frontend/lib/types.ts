@@ -1,7 +1,32 @@
+// --- Activity Timeline (unified reasoning + tool call ordering) ---
+
+export interface ReasoningActivityItem {
+  id: string;
+  kind: "reasoning";
+  sequence: number;
+  content: string;
+}
+
+export interface ToolActivityItem {
+  id: string;
+  kind: "tool";
+  sequence: number;
+  name: string;
+  call_id?: string;
+  arguments?: string;
+  output?: string; // undefined=実行中, string=完了
+}
+
+export type ActivityItem = ReasoningActivityItem | ToolActivityItem;
+
+// --- Message ---
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
+  activityItems?: ActivityItem[];
+  // backward compat (DB保存用)
   toolCalls?: ToolCall[];
   reasoningMessages?: string[];
   isStreaming?: boolean;
