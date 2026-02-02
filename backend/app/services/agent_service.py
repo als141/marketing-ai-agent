@@ -219,6 +219,40 @@ GA4 property_id: {property_id}
 ### get_property_details / get_custom_dimensions_and_metrics / list_google_ads_links / get_account_summaries
 - 情報取得系。エラーは起きにくい。必要に応じて呼べ。
 
+## GA4拡張ツール（Advanced Analytics）
+
+### check_compatibility(property_id, dimensions, metrics)
+- レポート実行前にディメンション・メトリクスの互換性を検証。不明な組み合わせならまずこれで確認してからrun_reportを呼べ。
+- dimensions, metricsはカンマ区切り文字列。
+
+### get_all_metadata(property_id)
+- 利用可能な**全**ディメンション・メトリクス一覧（標準+カスタム）
+- 「何が分析できる？」「このメトリクス名は？」系の質問に。get_custom_dimensions_and_metricsはカスタムのみだが、これは標準も含む。
+
+### batch_run_reports(property_id, requests_json)
+- 最大5レポートを1回のAPIコールで同時実行。run_reportを5回呼ぶより効率的。
+- 複数の切り口を同時に取得したい場合に使え。
+- requests_json例: `[{{"date_ranges":[{{"start_date":"28daysAgo","end_date":"yesterday"}}],"dimensions":["date"],"metrics":["sessions"]}},{{"date_ranges":[{{"start_date":"28daysAgo","end_date":"yesterday"}}],"dimensions":["deviceCategory"],"metrics":["sessions"]}}]`
+
+### run_pivot_report(property_id, date_ranges_json, dimensions, metrics, pivots_json)
+- クロス集計（例: チャネル×デバイス別セッション数のマトリクス）
+- dimensions: ピボットで使う全ディメンションをカンマ区切りで列挙
+- pivots_json例: `[{{"field_names":["deviceCategory"],"limit":5}}]`
+
+### list_key_events(property_id)
+- プロパティに設定されたコンバージョン/キーイベント一覧。コンバージョン分析の前にまず設定確認に使え。
+
+### list_data_streams(property_id)
+- データストリーム一覧（Web/App）。測定IDやストリーム名の確認。
+
+### list_custom_dimensions(property_id) / list_custom_metrics(property_id)
+- カスタムディメンション/メトリクスの設定詳細（スコープ、パラメータ名、単位等）。
+
+### run_funnel_report(property_id, funnel_json, date_ranges_json, funnel_breakdown_json)
+- ファネル分析。ステップごとの完了率・離脱率を算出。
+- funnel_json例: `{{"steps":[{{"name":"ページ閲覧","filter_expression":{{"event_filter":{{"event_name":"page_view"}}}}}},{{"name":"カート追加","filter_expression":{{"event_filter":{{"event_name":"add_to_cart"}}}}}},{{"name":"購入","filter_expression":{{"event_filter":{{"event_name":"purchase"}}}}}}],"is_open_funnel":false}}`
+- **v1alpha API（実験的）**。エラーになったらrun_reportで代替分析を試みよ。
+
 ## GSC（Google Search Console）ツール使用ルール
 
 ### list_properties
@@ -235,6 +269,10 @@ GA4 property_id: {property_id}
 ### get_advanced_search_analytics(site_url, start_date, end_date, dimensions, ...)
 - フィルタリング・ソート対応の高度な検索分析。特定ページやクエリの深掘りに。
 - filter_dimension / filter_expression でページやクエリの絞り込み可能。
+- **拡張パラメータ**:
+  - data_state: "all"で未確定の最新データも含めて取得。デフォルトは確定済みデータのみ。
+  - start_row: 25,000行超のデータをページネーション取得（0始まり）。row_limitと組み合わせて使え。
+  - aggregation_type: "byPage"でURL別集約、"byProperty"でサイト全体集約。pageディメンション使用時は"byProperty"不可。
 
 ### compare_search_periods(site_url, period1_start/end, period2_start/end, dimensions)
 - 2期間比較。SEOの成長・下落を定量化。
@@ -248,6 +286,13 @@ GA4 property_id: {property_id}
 ### get_sitemaps / submit_sitemap / delete_sitemap
 - サイトマップ管理。
 
+### get_hourly_search_analytics(site_url, date)
+- 時間帯別の検索パフォーマンス（過去2日以内限定）。
+- アルゴリズム変動やリリース直後の影響をリアルタイムに近い粒度で分析。
+
+### list_search_appearance_types()
+- searchAppearanceディメンションで使える値の一覧リファレンス。リッチリザルト分析時に参照。
+
 ## 使い分けガイド
 | 質問のタイプ | 使うツール |
 |---|---|
@@ -257,6 +302,15 @@ GA4 property_id: {property_id}
 | インデックス状態・技術的SEO | GSC: inspect_url_enhanced, check_indexing_issues |
 | リアルタイム状況 | GA4: run_realtime_report |
 | サイトマップ確認 | GSC: get_sitemaps |
+| ディメンション/メトリクスの互換性確認 | GA4 ext: check_compatibility |
+| 利用可能な指標の調査 | GA4 ext: get_all_metadata |
+| 複数レポート同時取得 | GA4 ext: batch_run_reports |
+| クロス集計・ピボット分析 | GA4 ext: run_pivot_report |
+| コンバージョン設定の確認 | GA4 ext: list_key_events |
+| ファネル分析 | GA4 ext: run_funnel_report |
+| 時間帯別の検索データ | GSC: get_hourly_search_analytics |
+| 大量データの全件取得 | GSC: get_advanced_search_analytics (start_row) |
+| リッチリザルト種類の確認 | GSC: list_search_appearance_types |
 
 ## チャート描画ルール（render_chart ツール）
 - データ取得後、視覚化が有効と判断したら **必ず `render_chart` ツールを呼んでチャートを描画せよ**。
@@ -307,12 +361,13 @@ GA4 property_id: {property_id}
         conversation_history: list[dict] | None = None,
         context_items: list[dict] | None = None,
     ) -> AsyncGenerator[dict, None]:
-        pair = self.mcp_manager.create_server_pair(user_id, refresh_token)
+        triple = self.mcp_manager.create_server_triple(user_id, refresh_token)
 
         try:
             async with AsyncExitStack() as stack:
-                await stack.enter_async_context(pair.ga4_server)
-                await stack.enter_async_context(pair.gsc_server)
+                await stack.enter_async_context(triple.ga4_server)
+                await stack.enter_async_context(triple.ga4_ext_server)
+                await stack.enter_async_context(triple.gsc_server)
 
                 # Queue for multiplexing SDK events and out-of-band events (ask_user)
                 queue: asyncio.Queue[dict | object] = asyncio.Queue()
@@ -331,7 +386,7 @@ GA4 property_id: {property_id}
                     name="GA4 & GSC Analytics Agent",
                     instructions=self._build_system_prompt(property_id),
                     model=settings.chat_model,
-                    mcp_servers=[pair.ga4_server, pair.gsc_server],
+                    mcp_servers=[triple.ga4_server, triple.ga4_ext_server, triple.gsc_server],
                     tools=[ask_user, render_chart],
                     model_settings=ModelSettings(
                         reasoning=Reasoning(effort="medium", summary="detailed"),
@@ -397,7 +452,7 @@ GA4 property_id: {property_id}
 
                 yield {"type": "done"}
         finally:
-            self.mcp_manager.cleanup_server_pair(pair)
+            self.mcp_manager.cleanup_server_triple(triple)
 
     def _process_sdk_event(self, event) -> dict | None:
         """Convert a single SDK stream event into a dict for SSE, or None to skip."""

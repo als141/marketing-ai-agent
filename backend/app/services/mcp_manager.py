@@ -12,9 +12,10 @@ from app.services.compact_mcp import CompactMCPServer
 
 SESSION_TIMEOUT_SECONDS = 600  # 10 minutes
 
-# Path to GSC MCP server script
+# Paths to MCP server scripts
 _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 GSC_SERVER_SCRIPT = os.path.join(_BACKEND_DIR, "scripts", "gsc_server.py")
+GA4_EXT_SERVER_SCRIPT = os.path.join(_BACKEND_DIR, "scripts", "ga4_extended_server.py")
 
 
 @dataclass
@@ -35,6 +36,19 @@ class MCPSession:
 class MCPServerPair:
     """A pair of GA4 + GSC MCP servers with their credential paths for cleanup."""
     ga4_server: MCPServerStdio
+    gsc_server: MCPServerStdio
+    ga4_creds_path: str
+    gsc_creds_path: str
+
+
+@dataclass
+class MCPServerTriple:
+    """GA4 base + GA4 extended + GSC MCP servers with credential paths.
+    GA4 base and GA4 extended share the same credential file (read-only).
+    GSC has its own separate credential file (it writes back on refresh).
+    """
+    ga4_server: CompactMCPServer
+    ga4_ext_server: CompactMCPServer
     gsc_server: MCPServerStdio
     ga4_creds_path: str
     gsc_creds_path: str
@@ -99,6 +113,26 @@ class MCPSessionManager:
         )
         return server, creds_path
 
+    def create_ga4_extended_server(self, ga4_creds_path: str) -> CompactMCPServer:
+        """Create GA4 extended MCP server sharing the same credentials as GA4 base.
+        Wrapped with CompactMCPServer for batch/pivot/funnel output compression."""
+        settings = get_settings()
+        raw_server = MCPServerStdio(
+            params=MCPServerStdioParams(
+                command=sys.executable,
+                args=[GA4_EXT_SERVER_SCRIPT],
+                env={
+                    "GOOGLE_APPLICATION_CREDENTIALS": ga4_creds_path,
+                    "GOOGLE_CLOUD_PROJECT": settings.google_project_id,
+                    "GCLOUD_PROJECT": settings.google_project_id,
+                    "GOOGLE_CLOUD_QUOTA_PROJECT": settings.google_project_id,
+                },
+            ),
+            cache_tools_list=True,
+            client_session_timeout_seconds=120,
+        )
+        return CompactMCPServer(raw_server)
+
     def create_server_pair(self, user_id: str, refresh_token: str) -> MCPServerPair:
         """Create both GA4 and GSC servers with separate credential files."""
         ga4_server, ga4_creds = self.create_ga4_server(user_id, refresh_token)
@@ -110,10 +144,29 @@ class MCPSessionManager:
             gsc_creds_path=gsc_creds,
         )
 
+    def create_server_triple(self, user_id: str, refresh_token: str) -> MCPServerTriple:
+        """Create GA4 base + GA4 extended + GSC servers.
+        GA4 base and extended share the same credential file."""
+        ga4_server, ga4_creds = self.create_ga4_server(user_id, refresh_token)
+        ga4_ext_server = self.create_ga4_extended_server(ga4_creds)
+        gsc_server, gsc_creds = self.create_gsc_server(user_id, refresh_token)
+        return MCPServerTriple(
+            ga4_server=ga4_server,
+            ga4_ext_server=ga4_ext_server,
+            gsc_server=gsc_server,
+            ga4_creds_path=ga4_creds,
+            gsc_creds_path=gsc_creds,
+        )
+
     def cleanup_server_pair(self, pair: MCPServerPair):
         """Clean up credential files for a server pair."""
         self.credentials_manager.cleanup_path(pair.ga4_creds_path)
         self.credentials_manager.cleanup_path(pair.gsc_creds_path)
+
+    def cleanup_server_triple(self, triple: MCPServerTriple):
+        """Clean up credential files for a server triple."""
+        self.credentials_manager.cleanup_path(triple.ga4_creds_path)
+        self.credentials_manager.cleanup_path(triple.gsc_creds_path)
 
     # Backward compat alias
     def create_mcp_server(self, user_id: str, refresh_token: str) -> tuple[MCPServerStdio, str]:

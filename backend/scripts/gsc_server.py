@@ -234,8 +234,11 @@ def get_advanced_search_analytics(
     filter_dimension: str = "",
     filter_expression: str = "",
     filter_operator: str = "contains",
+    data_state: str = "",
+    start_row: int = 0,
+    aggregation_type: str = "",
 ) -> str:
-    """Advanced search analytics with filtering and sorting.
+    """Advanced search analytics with filtering, sorting, pagination, and data freshness control.
 
     Args:
         site_url: Site URL
@@ -248,6 +251,9 @@ def get_advanced_search_analytics(
         filter_dimension: Dimension to filter on
         filter_expression: Filter value
         filter_operator: contains, equals, notContains, notEquals, includingRegex, excludingRegex
+        data_state: Data freshness - "final" (validated only) or "all" (includes fresh/unvalidated data). Default: final.
+        start_row: Zero-based row offset for pagination (use with row_limit to fetch >25000 rows)
+        aggregation_type: How to aggregate - "auto" (default), "byProperty" (site-level), "byPage" (per canonical URL). Cannot use "byProperty" when dimensions include "page".
     """
     service = get_gsc_service()
     dim_list = [d.strip() for d in dimensions.split(",")]
@@ -258,6 +264,13 @@ def get_advanced_search_analytics(
         "type": search_type,
         "rowLimit": min(row_limit, 25000),
     }
+
+    if data_state:
+        request_body["dataState"] = data_state
+    if start_row > 0:
+        request_body["startRow"] = start_row
+    if aggregation_type:
+        request_body["aggregationType"] = aggregation_type
 
     if filter_dimension and filter_expression:
         request_body["dimensionFilterGroups"] = [
@@ -598,6 +611,127 @@ def delete_sitemap(site_url: str, sitemap_url: str) -> str:
         return f"Successfully deleted sitemap: {sitemap_url}"
     except Exception as e:
         return f"Error deleting sitemap: {str(e)}"
+
+
+# ── Hourly Analytics ──
+
+
+@mcp.tool()
+def get_hourly_search_analytics(
+    site_url: str,
+    date: str,
+    dimensions: str = "",
+) -> str:
+    """Get hourly search performance data for a specific date (last 2 days only).
+
+    Returns time-of-day breakdown of clicks, impressions, CTR, and position.
+    Useful for monitoring algorithm changes, new content launches, or time-based patterns.
+
+    Args:
+        site_url: Site URL (e.g., 'sc-domain:example.com')
+        date: Date to analyze (YYYY-MM-DD). Must be within the last 2 days.
+        dimensions: Optional additional comma-separated dimensions (e.g., 'query,page')
+    """
+    from datetime import datetime, timedelta
+
+    try:
+        target = datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        return f"Error: Invalid date format '{date}'. Use YYYY-MM-DD."
+
+    now = datetime.now()
+    days_ago = (now - target).days
+    if days_ago > 2 or days_ago < 0:
+        return f"Error: Hourly data is only available for the last 2 days. '{date}' is {days_ago} days ago."
+
+    service = get_gsc_service()
+
+    dim_list = ["date"]
+    if dimensions:
+        extra = [d.strip() for d in dimensions.split(",") if d.strip()]
+        dim_list.extend(extra)
+
+    request_body = {
+        "startDate": date,
+        "endDate": date,
+        "dimensions": dim_list,
+        "dataState": "all",
+        "rowLimit": 25000,
+    }
+
+    try:
+        response = (
+            service.searchanalytics()
+            .query(siteUrl=site_url, body=request_body)
+            .execute()
+        )
+        rows = response.get("rows", [])
+        if not rows:
+            return f"No hourly data found for {site_url} on {date}."
+
+        result = f"## Hourly Search Analytics: {site_url}\n"
+        result += f"**Date:** {date}\n\n"
+        result += "| " + " | ".join(dim_list) + " | Clicks | Impressions | CTR | Position |\n"
+        result += "| " + " | ".join(["---"] * (len(dim_list) + 4)) + " |\n"
+
+        for row in sorted(rows, key=lambda r: r.get("keys", [""])[0]):
+            keys = row.get("keys", [])
+            clicks = row.get("clicks", 0)
+            impressions = row.get("impressions", 0)
+            ctr = row.get("ctr", 0) * 100
+            position = row.get("position", 0)
+            result += f"| {' | '.join(str(k) for k in keys)} | {clicks:,} | {impressions:,} | {ctr:.1f}% | {position:.1f} |\n"
+
+        return result
+    except Exception as e:
+        return f"Error fetching hourly analytics: {str(e)}"
+
+
+# ── Reference Tools ──
+
+
+@mcp.tool()
+def list_search_appearance_types() -> str:
+    """List all known searchAppearance dimension values with descriptions.
+
+    Use this as a reference when analyzing search appearance data with
+    get_search_analytics or get_advanced_search_analytics using
+    the 'searchAppearance' dimension.
+    """
+    types = [
+        ("AMP_BLUE_LINK", "AMP page shown as a plain blue link result"),
+        ("AMP_TOP_STORIES", "AMP article in the Top Stories carousel"),
+        ("AMP_IMAGE_RESULT", "AMP page in image search results"),
+        ("BOOK_VIEWER", "Book viewer result"),
+        ("EDUCATION_Q_AND_A", "Education Q&A result"),
+        ("EVENTS_LISTING", "Events listing rich result"),
+        ("FAQ_RICH_RESULT", "FAQ rich result (expandable Q&A)"),
+        ("HOW_TO_RICH_RESULT", "How-to rich result with steps"),
+        ("JOB_LISTING", "Job posting rich result"),
+        ("LEARNING_VIDEOS", "Educational video rich result"),
+        ("MATH_SOLVERS_RICH_RESULT", "Math solver result"),
+        ("MERCHANT_LISTINGS", "Product listing with price/availability (free)"),
+        ("ORGANIC_SHOPPING", "Organic shopping result"),
+        ("PRACTICE_PROBLEMS_RICH_RESULT", "Practice problems result"),
+        ("PRODUCT_SNIPPETS", "Visually enhanced product result"),
+        ("RECIPE_FEATURE", "Recipe in a carousel or gallery"),
+        ("RECIPE_RICH_SNIPPET", "Recipe with image, rating, cook time"),
+        ("REVIEW_SNIPPET", "Review/rating stars snippet"),
+        ("SPECIAL_ANNOUNCEMENT", "Special announcement (COVID-19 etc.)"),
+        ("SUBSCRIBED_CONTENT", "Paywalled/subscribed content result"),
+        ("TRANSLATED_RESULT", "Translated page result"),
+        ("VIDEO", "Video rich result with thumbnail"),
+        ("WEB_LIGHT_RESULT", "Lite/optimized version of a page"),
+        ("WEB_STORY", "Web Story (formerly AMP Story)"),
+    ]
+
+    result = "## Search Appearance Types\n\n"
+    result += "Use these values with the `searchAppearance` dimension.\n\n"
+    result += "| Value | Description |\n|---|---|\n"
+    for value, desc in types:
+        result += f"| {value} | {desc} |\n"
+
+    return result
 
 
 if __name__ == "__main__":

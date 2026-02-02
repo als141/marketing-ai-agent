@@ -31,7 +31,7 @@ frontend/  - Next.js 16 + React 19 + bun
 - **Auth**: Clerk (user auth) + Independent Google OAuth (GA4/GSC access)
 - **DB**: Supabase (PostgreSQL)
 - **AI**: OpenAI GPT-5.2 via Agents SDK with MCP servers
-- **MCP Servers**: analytics-mcp (GA4), scripts/gsc_server.py (Google Search Console wrapper)
+- **MCP Servers**: analytics-mcp (GA4基本), scripts/ga4_extended_server.py (GA4拡張), scripts/gsc_server.py (GSC)
 - **情報ソース**:
   - OpenAI Agents SDK: https://github.com/openai/openai-agents-python
   - analytics-mcp (GA4): https://github.com/nicosalm/analytics-mcp（`pip install analytics-mcp` / MCP stdio）
@@ -47,6 +47,42 @@ frontend/  - Next.js 16 + React 19 + bun
 - Per-user MCP subprocess with ADC credentials file (authorized_user format)
 - SSE streaming from FastAPI to frontend via useChat hook
 - Clerk JWT verification via JWKS endpoint
+
+## MCPサーバー構成（3サーバー体制）
+- **アーキテクチャ**: Agent → 3 MCPサーバー (analytics-mcp + ga4_extended_server.py + gsc_server.py)
+- **MCPServerTriple**: `mcp_manager.py` で3サーバーを一括管理。GA4基本+GA4拡張は同じcredentialファイルを共有
+- **GA4基本** (analytics-mcp): 外部パッケージ。run_report, run_realtime_report, get_account_summaries, get_property_details, list_google_ads_links, get_custom_dimensions_and_metrics
+- **GA4拡張** (ga4_extended_server.py): 自作FastMCPサーバー。以下の9ツール:
+  - `check_compatibility`: ディメンション/メトリクス互換性検証
+  - `get_all_metadata`: 全ディメンション・メトリクス一覧（標準+カスタム）
+  - `batch_run_reports`: 最大5レポート一括実行
+  - `run_pivot_report`: クロス集計/ピボット分析
+  - `list_key_events`: コンバージョン/キーイベント一覧
+  - `list_data_streams`: データストリーム一覧
+  - `list_custom_dimensions`: カスタムディメンション設定詳細
+  - `list_custom_metrics`: カスタムメトリクス設定詳細
+  - `run_funnel_report`: ファネル分析（v1alpha、実験的）
+- **GSC** (gsc_server.py): 自作FastMCPサーバー。16ツール（既存14 + 新規2）:
+  - 既存ツール + `get_hourly_search_analytics` (時間帯別データ) + `list_search_appearance_types` (リッチリザルト種類リファレンス)
+  - `get_advanced_search_analytics` に `data_state`, `start_row`, `aggregation_type` パラメータ追加
+- **CompactMCPServer**: GA4基本+GA4拡張の両方をラップ。以下のツール出力を圧縮:
+  - `run_report` / `run_realtime_report` → TSV (既存、~77%削減)
+  - `batch_run_reports` → 各サブレポートをTSV化 (~78%削減)
+  - `run_pivot_report` → ピボットヘッダー展開TSV (~79%削減)
+  - `run_funnel_report` → ファネルテーブルTSV (~74%削減)
+- **依存パッケージ**: `google-analytics-data` (data_v1beta + data_v1alpha) と `google-analytics-admin` (admin_v1beta) は analytics-mcp の transitive dependency で既にインストール済み
+- **情報ソース**:
+  - GA4 Data API v1beta: https://developers.google.com/analytics/devguides/reporting/data/v1/rest
+  - GA4 Data API v1alpha (funnel): https://developers.google.com/analytics/devguides/reporting/data/v1/rest/v1alpha
+  - GA4 Admin API v1beta: https://developers.google.com/analytics/devguides/config/admin/v1/rest
+  - GSC API: https://developers.google.com/webmaster-tools/v1/api_reference_index
+  - GSC hourly data (2025/04): https://developers.google.com/search/blog/2025/04/san-hourly-data
+- **実装ファイル**:
+  - `backend/scripts/ga4_extended_server.py` — GA4拡張MCPサーバー
+  - `backend/scripts/gsc_server.py` — GSC MCPサーバー（拡張済み）
+  - `backend/app/services/mcp_manager.py` — MCPServerTriple、3サーバーライフサイクル管理
+  - `backend/app/services/compact_mcp.py` — 圧縮関数（batch/pivot/funnel対応追加）
+  - `backend/app/services/agent_service.py` — 3サーバー接続、システムプロンプト（全ツール使い方ガイド）
 
 ## Credentials管理アーキテクチャ（重要）
 - **永続ストレージ**: Supabase `users.google_refresh_token` にrefresh_tokenを保存（source of truth）
