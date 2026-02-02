@@ -135,6 +135,14 @@ export default function DashboardPage({ params }: PageProps) {
           token
         );
         setConversationId(initialConversationId!);
+        // Restore property_id from conversation so PropertySelector picks it up
+        if (data.property_id) {
+          setSelectedProperty((prev) =>
+            prev?.property_id === data.property_id
+              ? prev
+              : { property_id: data.property_id!, property_name: "", account_name: "" }
+          );
+        }
         if (data.messages) {
           const msgs: Message[] = (data.messages as MessageRecord[])
             .filter((m) => m.role === "user" || m.role === "assistant")
@@ -165,6 +173,14 @@ export default function DashboardPage({ params }: PageProps) {
     async (conv: Conversation) => {
       setConversationId(conv.id);
       window.history.replaceState({}, "", `/dashboard/c/${conv.id}`);
+      // Restore property_id from conversation
+      if (conv.property_id) {
+        setSelectedProperty((prev) =>
+          prev?.property_id === conv.property_id
+            ? prev
+            : { property_id: conv.property_id!, property_name: "", account_name: "" }
+        );
+      }
       try {
         const token = await getToken();
         const data = await apiJson<Conversation>(

@@ -227,7 +227,12 @@ async def stream_chat(
                             )
                         if activity_items:
                             msg_data["activity_items"] = activity_items
-                        supabase.table("messages").insert(msg_data).execute()
+                        try:
+                            supabase.table("messages").insert(msg_data).execute()
+                        except Exception:
+                            # Fallback: activity_items column may not exist yet
+                            msg_data.pop("activity_items", None)
+                            supabase.table("messages").insert(msg_data).execute()
 
                     # Update conversation timestamp
                     supabase.table("conversations").update(

@@ -111,10 +111,14 @@ class CompactMCPServer:
     Implements the same interface as MCPServer so the Agents SDK treats it
     as a regular MCP server. Delegates all calls to the inner server,
     but transforms call_tool outputs for specific tools.
+
+    Also enforces a max character limit on ALL tool outputs to prevent
+    context window overflow.
     """
 
-    def __init__(self, inner: Any):
+    def __init__(self, inner: Any, max_output_chars: int = 16000):
         self._inner = inner
+        self._max_output_chars = max_output_chars
 
     # --- Proxied properties ---
 
@@ -155,21 +159,48 @@ class CompactMCPServer:
     ) -> CallToolResult:
         result = await self._inner.call_tool(tool_name, arguments)
 
-        if tool_name not in _COMPACT_TOOLS:
+        if not result or not hasattr(result, "content") or not result.content:
             return result
 
-        # Compact the content items
-        if result and hasattr(result, "content") and result.content:
-            new_content = []
-            for item in result.content:
-                if hasattr(item, "text") and item.text:
-                    compacted = _compact_ga4_report(item.text)
-                    new_content.append(TextContent(type="text", text=compacted))
-                else:
-                    new_content.append(item)
-            return CallToolResult(content=new_content, isError=result.isError)
+        new_content = []
+        for item in result.content:
+            if not hasattr(item, "text") or not item.text:
+                new_content.append(item)
+                continue
 
-        return result
+            text = item.text
+
+            # Apply GA4 report compaction for specific tools
+            if tool_name in _COMPACT_TOOLS:
+                text = _compact_ga4_report(text)
+
+            # Enforce max output character limit
+            if len(text) > self._max_output_chars:
+                # For TSV: truncate by lines to keep data coherent
+                lines = text.split("\n")
+                truncated_lines = []
+                char_count = 0
+                for line in lines:
+                    if char_count + len(line) + 1 > self._max_output_chars - 80:
+                        break
+                    truncated_lines.append(line)
+                    char_count += len(line) + 1
+                total_lines = len(lines)
+                kept_lines = len(truncated_lines)
+                truncated_lines.append("---")
+                truncated_lines.append(
+                    f"[truncated: showing {kept_lines}/{total_lines} lines, "
+                    f"{self._max_output_chars} char limit]"
+                )
+                text = "\n".join(truncated_lines)
+                logger.info(
+                    f"[CompactMCP] Truncated {tool_name} output: "
+                    f"{kept_lines}/{total_lines} lines kept"
+                )
+
+            new_content.append(TextContent(type="text", text=text))
+
+        return CallToolResult(content=new_content, isError=result.isError)
 
     async def list_prompts(self) -> ListPromptsResult:
         return await self._inner.list_prompts()

@@ -33,8 +33,14 @@ export function PropertySelector({ selectedPropertyId, onSelect }: Props) {
           token
         );
         setProperties(data);
-        if (data.length > 0 && !selectedPropertyId) {
-          onSelect(data[0]);
+        if (data.length > 0) {
+          if (selectedPropertyId) {
+            // Restore full property object from saved property_id
+            const match = data.find((p) => p.property_id === selectedPropertyId);
+            if (match) onSelect(match);
+          } else {
+            onSelect(data[0]);
+          }
         }
       } catch (err) {
         setError("プロパティの取得に失敗しました");

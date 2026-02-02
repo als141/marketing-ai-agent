@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     chat_model: str = "gpt-5.2"
     reasoning_translate_model: str = "gpt-5-nano"
+    max_tool_output_chars: int = 16000
 
     frontend_url: str = "http://localhost:3000"
     backend_url: str = "http://localhost:8000"

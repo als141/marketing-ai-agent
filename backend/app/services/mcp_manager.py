@@ -81,7 +81,7 @@ class MCPSessionManager:
             cache_tools_list=True,
             client_session_timeout_seconds=120,
         )
-        return CompactMCPServer(raw_server), creds_path
+        return CompactMCPServer(raw_server, max_output_chars=settings.max_tool_output_chars), creds_path
 
     def create_gsc_server(self, user_id: str, refresh_token: str) -> tuple[MCPServerStdio, str]:
         """Create GSC MCP server. Returns (server, creds_path) for cleanup."""
