@@ -118,9 +118,11 @@ function ReasoningSummary({
       <div className="mb-2.5 sm:mb-3">
         <div className="flex items-start gap-2">
           <span className="shrink-0 mt-[3px] w-[3px] h-[3px] rounded-full bg-[#9ca3af] animate-pulse" />
-          <p className="text-[11px] text-[#9ca3af] leading-relaxed tracking-[0.01em]">
-            {latest}
-          </p>
+          <div className="reasoning-markdown text-[11px] text-[#9ca3af] leading-relaxed tracking-[0.01em] [&_p]:my-0.5 [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:text-[11px] [&_li]:text-[#9ca3af] [&_strong]:text-[#7f8694] [&_*]:text-[11px]">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {latest}
+            </ReactMarkdown>
+          </div>
         </div>
       </div>
     );
@@ -144,14 +146,16 @@ function ReasoningSummary({
         <span className="opacity-60 tabular-nums">{messages.length}</span>
       </button>
       {isOpen && (
-        <div className="mt-1.5 ml-[14px] space-y-1 border-l border-[#e5e7eb] pl-2.5">
+        <div className="mt-1.5 ml-[14px] space-y-1.5 border-l border-[#e5e7eb] pl-2.5">
           {messages.map((msg, i) => (
-            <p
+            <div
               key={i}
-              className="text-[11px] text-[#9ca3af] leading-relaxed"
+              className="reasoning-markdown text-[11px] text-[#9ca3af] leading-relaxed [&_p]:my-0.5 [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:text-[11px] [&_li]:text-[#9ca3af] [&_strong]:text-[#7f8694] [&_*]:text-[11px]"
             >
-              {msg}
-            </p>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {msg}
+              </ReactMarkdown>
+            </div>
           ))}
         </div>
       )}

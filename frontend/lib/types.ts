@@ -10,6 +10,7 @@ export interface Message {
 export interface ToolCall {
   type: string;
   name: string;
+  call_id?: string;
   arguments?: string;
   output?: string;
 }
@@ -53,6 +54,7 @@ export interface StreamEvent {
     | "error"
     | "response_created";
   content?: string;
+  call_id?: string;
   name?: string;
   arguments?: string;
   output?: string;

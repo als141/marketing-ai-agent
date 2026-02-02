@@ -152,12 +152,17 @@ GA4 property_id: {property_id}
                             raw = item.raw_item
                             yield {
                                 "type": "tool_call",
+                                "call_id": getattr(raw, "call_id", None),
                                 "name": getattr(raw, "name", "unknown"),
                                 "arguments": getattr(raw, "arguments", ""),
                             }
                         elif item.type == "tool_call_output_item":
+                            raw = item.raw_item
+                            # raw_item is FunctionCallOutput (TypedDict)
+                            call_id = raw["call_id"] if isinstance(raw, dict) else getattr(raw, "call_id", None)
                             yield {
                                 "type": "tool_result",
+                                "call_id": call_id,
                                 "output": str(item.output)[:2000],
                             }
                     # ReasoningItem handling (isinstance check, not type string)

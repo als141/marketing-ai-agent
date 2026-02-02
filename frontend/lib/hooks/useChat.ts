@@ -100,6 +100,7 @@ export function useChat(propertyId: string) {
             } else if (event.type === "tool_call") {
               const tc: ToolCall = {
                 type: "call",
+                call_id: event.call_id,
                 name: event.name || "unknown",
                 arguments: event.arguments,
               };
@@ -115,12 +116,20 @@ export function useChat(propertyId: string) {
                 prev.map((m) => {
                   if (m.id !== assistantId) return m;
                   const calls = [...(m.toolCalls || [])];
-                  if (calls.length > 0) {
-                    const last = calls[calls.length - 1];
-                    calls[calls.length - 1] = {
-                      ...last,
-                      output: event.output,
-                    };
+                  // call_idでマッチング
+                  if (event.call_id) {
+                    const idx = calls.findIndex(
+                      (c) => c.call_id === event.call_id && !c.output
+                    );
+                    if (idx !== -1) {
+                      calls[idx] = { ...calls[idx], output: event.output };
+                    }
+                  } else {
+                    // call_idがない場合はoutputが未設定の最初のツールに割り当て
+                    const idx = calls.findIndex((c) => !c.output);
+                    if (idx !== -1) {
+                      calls[idx] = { ...calls[idx], output: event.output };
+                    }
                   }
                   return { ...m, toolCalls: calls };
                 })
@@ -150,9 +159,14 @@ export function useChat(propertyId: string) {
                 );
               }
               setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId ? { ...m, isStreaming: false } : m
-                )
+                prev.map((m) => {
+                  if (m.id !== assistantId) return m;
+                  // ストリーム完了: 未完了のツールを全て完了扱いにする
+                  const calls = (m.toolCalls || []).map((tc) =>
+                    tc.output ? tc : { ...tc, output: "(completed)" }
+                  );
+                  return { ...m, isStreaming: false, toolCalls: calls };
+                })
               );
             } else if (event.type === "error") {
               setMessages((prev) =>

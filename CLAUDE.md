@@ -98,6 +98,7 @@ frontend/  - Next.js 16 + React 19 + bun
 - **CORS 400 on OPTIONS**: Cloud RunにFRONTEND_URL環境変数が未設定だった → 設定で解決
 - **401 CLERK_JWKS_URL must be set**: Cloud RunにClerk環境変数が未設定だった → 設定で解決
 - **[Errno 2] No such file or directory (analytics-mcp)**: pyproject.tomlにanalytics-mcpが依存関係として未記載だった → `analytics-mcp>=0.1.1` を追加して解決
+- **ツールバッジが完了にならない問題**: `tool_result`のマッチングが「配列の最後の要素」固定だったため、複数ツール呼び出し時に先行ツールが永久にローディング状態になった。原因: バックエンドが`call_id`を送信しておらず、フロントが結果をどのツールに紐付けるか判別不能だった。修正: (1) バックエンドで`ToolCallItem.raw_item.call_id`と`ToolCallOutputItem.raw_item["call_id"]`を送信、(2) フロントで`call_id`ベースのマッチング、(3) `done`イベント時に未完了ツールを全て完了扱い
 
 ## GPT-5.2 Reasoning Configuration
 - GPT-5.2はreasoning effortパラメータをサポート: `none`, `low`, `medium`, `high`, `xhigh`
