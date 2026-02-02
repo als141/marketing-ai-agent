@@ -80,9 +80,18 @@ frontend/  - Next.js 16 + React 19 + bun
 
 ## Google OAuth 本番化ステータス
 - 現在: **テストモード**（テストユーザー最大100人のみ利用可）
-- スコープ `analytics.readonly` は **Restricted** → 本番公開にはCASAセキュリティ監査が必要
+- スコープ `analytics.readonly` は **Sensitive**（~~Restricted~~ではない → CASAセキュリティ監査は不要）
 - スコープ `webmasters` は **Sensitive** → 審査は必要だがCASAは不要
-- 本番公開に必要: プライバシーポリシー、利用規約、ドメイン所有権確認、スコープ正当性説明
+- 両スコープとも Sensitive scope verification のみで本番化可能（通常3-7営業日）
+- **情報ソース**: [Sensitive Scope Verification](https://developers.google.com/identity/protocols/oauth2/production-readiness/sensitive-scope-verification)、[Restricted Scopes一覧](https://support.google.com/cloud/answer/13464325)（analytics.readonlyは含まれていない）
+- 本番公開に必要:
+  - [x] プライバシーポリシーページ (`/privacy-policy`)
+  - [x] 利用規約ページ (`/terms`)
+  - [ ] ドメイン所有権確認（Google Search Console + DNS TXTレコード）
+  - [ ] OAuth同意画面にポリシーURL設定
+  - [ ] デモ動画（YouTube限定公開）
+  - [ ] スコープ正当性説明文
+  - [ ] 審査リクエスト送信
 - Google Cloud Console > OAuth同意画面でリダイレクトURI・JS生成元に本番URLを追加済み
 
 ## Troubleshooting Log

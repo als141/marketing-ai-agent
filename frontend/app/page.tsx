@@ -121,6 +121,20 @@ export default function LandingPage() {
           ))}
         </div>
       </main>
+
+      <footer className="relative z-10 border-t border-[#e5e7eb] py-6 px-4 sm:px-8">
+        <div className="max-w-6xl mx-auto flex items-center justify-between text-xs text-[#6b7280]">
+          <span>&copy; {new Date().getFullYear()} GA4 Agent</span>
+          <div className="flex gap-4">
+            <Link href="/privacy-policy" className="hover:text-[#1a1a2e] transition-colors">
+              プライバシーポリシー
+            </Link>
+            <Link href="/terms" className="hover:text-[#1a1a2e] transition-colors">
+              利用規約
+            </Link>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -171,6 +171,49 @@
   background: #9ca3af;
 }
 
+/* ── Prose style for policy pages ── */
+.prose-policy {
+  color: #1a1a2e;
+  line-height: 1.8;
+}
+.prose-policy h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+.prose-policy h2 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.375rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+.prose-policy h3 {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+.prose-policy p {
+  font-size: 0.875rem;
+  margin-bottom: 0.75rem;
+  color: #374151;
+}
+.prose-policy ul {
+  font-size: 0.875rem;
+  color: #374151;
+  margin-bottom: 0.75rem;
+  padding-left: 1.25rem;
+  list-style-type: disc;
+}
+.prose-policy ul li {
+  margin-bottom: 0.375rem;
+}
+.prose-policy section {
+  margin-bottom: 1.5rem;
+}
+
 /* ── Safe area for mobile devices with notch ── */
 @supports (padding: env(safe-area-inset-bottom)) {
   .safe-bottom {
