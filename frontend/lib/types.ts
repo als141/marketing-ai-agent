@@ -149,6 +149,7 @@ export interface ActivityItemRecord {
   spec?: ChartSpec;
   groupId?: string;
   questions?: AskUserQuestionItem[];
+  responses?: Record<string, string>;
 }
 
 export interface PropertySummary {

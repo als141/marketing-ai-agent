@@ -206,6 +206,16 @@ async def stream_chat(
                         "groupId": event.get("group_id"),
                         "questions": event.get("questions"),
                     })
+                elif event["type"] == "_ask_user_responses":
+                    # Internal event: persist user responses into activity_items
+                    gid = event.get("group_id")
+                    responses = event.get("responses")
+                    if gid and responses:
+                        for item in activity_items:
+                            if item.get("kind") == "ask_user" and item.get("groupId") == gid:
+                                item["responses"] = responses
+                                break
+                    continue  # Don't send to client
                 elif event["type"] == "done":
                     _flush_text()
 

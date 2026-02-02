@@ -100,6 +100,15 @@ async def ask_user(
     responses = group.responses or {}
     store.cleanup(group.group_id)
 
+    # Emit internal event so chat.py can persist responses in activity_items
+    await ctx.context.emit_event(
+        {
+            "type": "_ask_user_responses",
+            "group_id": group.group_id,
+            "responses": responses,
+        }
+    )
+
     # Return as readable text for the agent
     parts = []
     for q in group.questions:

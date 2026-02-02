@@ -31,7 +31,7 @@ frontend/  - Next.js 16 + React 19 + bun
 - **Auth**: Clerk (user auth) + Independent Google OAuth (GA4/GSC access)
 - **DB**: Supabase (PostgreSQL)
 - **AI**: OpenAI GPT-5.2 via Agents SDK with MCP servers
-- **MCP Servers**: analytics-mcp (GA4), scripts/gsc_server.py (Google Search Console wrapper)
+- **MCP Servers**: analytics-mcp (GA4基本), scripts/ga4_extended_server.py (GA4拡張), scripts/gsc_server.py (GSC)
 - **情報ソース**:
   - OpenAI Agents SDK: https://github.com/openai/openai-agents-python
   - analytics-mcp (GA4): https://github.com/nicosalm/analytics-mcp（`pip install analytics-mcp` / MCP stdio）
@@ -117,6 +117,7 @@ frontend/  - Next.js 16 + React 19 + bun
 - **[Errno 2] No such file or directory (analytics-mcp)**: pyproject.tomlにanalytics-mcpが依存関係として未記載だった → `analytics-mcp>=0.1.1` を追加して解決
 - **ツールバッジが完了にならない問題**: `tool_result`のマッチングが「配列の最後の要素」固定だったため、複数ツール呼び出し時に先行ツールが永久にローディング状態になった。原因: バックエンドが`call_id`を送信しておらず、フロントが結果をどのツールに紐付けるか判別不能だった。修正: (1) バックエンドで`ToolCallItem.raw_item.call_id`と`ToolCallOutputItem.raw_item["call_id"]`を送信、(2) フロントで`call_id`ベースのマッチング、(3) `done`イベント時に未完了ツールを全て完了扱い
 - **GA4 run_report「Type is None」エラー**: GSCサーバーがcredentialsリフレッシュ時に同一ファイルを`Credentials.to_json()`で上書き → `type`フィールドが消失 → GA4の`google.auth.default()`が「Type is None」で失敗。修正: (1) GA4とGSCで別ファイルに分離、(2) GSCの書き戻しで`type`フィールドを保持、(3) UUID付きセッションディレクトリで競合回避、(4) finally句でクリーンアップ
+- **ask_user回答がDB保存されない問題**: バックエンドの`event_generator`内の`activity_items`にユーザー回答(responses)が含まれないままDB保存されていた。原因: ask_userイベント時点では未回答、フロントの`respondToQuestions()`はReact stateのみ更新しバックエンドのactivity_itemsには反映されない。修正: `agent_service.py`のask_userツール関数で回答取得後に`_ask_user_responses`内部イベントをemit → `chat.py`でインターセプトしactivity_itemsに書き戻し。同時に`ActivityItemRecord`型に`responses`フィールドを追加
 
 ## GPT-5.2 Reasoning Configuration
 - GPT-5.2はreasoning effortパラメータをサポート: `none`, `low`, `medium`, `high`, `xhigh`
@@ -278,6 +279,41 @@ frontend/  - Next.js 16 + React 19 + bun
   - `backend/app/services/compact_mcp.py` — `CompactMCPServer` プロキシ + `_compact_ga4_report()` 変換関数
   - `backend/app/services/mcp_manager.py` — `create_ga4_server()` で `CompactMCPServer(raw_server)` にラップ
 
+## ThinkingIndicator（考え中インジケーター）
+- **問題**: メッセージ送信後、最初のSSEイベント到着まで3-9秒間、点滅する赤い縦棒しか表示されず「壊れている」ように見える
+- **解決**: Phase 1（待機中）専用の`ThinkingIndicator`コンポーネントを表示
+- **デザイン**: 3つのドット（5px、`#c0c4cc`）がopacityパルス（0.2sスタガー）+ 日本語ラベルが3秒ごとにローテーション（「考えています」→「データを確認しています」→「分析しています」）
+- **表示条件**: `message.isStreaming && items.length === 0 && !message.content` — 最初のSSEイベント到着で自然にアンマウント
+- **退場アニメーションなし**: コンテンツ表示を遅延させないため即座にアンマウント
+- **アクセシビリティ**: `role="status"` + `aria-label`、`prefers-reduced-motion`でアニメーション無効化
+- **実装ファイル**:
+  - `frontend/app/dashboard/components/ThinkingIndicator.tsx` — コンポーネント（新規）
+  - `frontend/app/globals.css` — `thinking-pulse`, `thinking-enter`, `thinking-label-in` キーフレーム
+  - `frontend/app/dashboard/components/ChatMessage.tsx` — `showThinking` 条件分岐をレガシーモードに追加
+
+## チャットレイテンシの内訳（調査結果）
+- **最初のテキスト到達まで推定3.5-9.5秒**
+- 内訳:
+  1. OpenAI Reasoning (`effort="medium"`): 2-5秒 — `agent_service.py:392`
+  2. MCPサーバー3つの逐次起動: 1-3秒 — `agent_service.py:368-370`（`await stack.enter_async_context()`で順番に起動）
+  3. Supabase同期DBクエリ6-8回: 0.5-1.5秒 — `chat.py:40-90`
+  4. Reasoning翻訳 (gpt-5-nano): 0.5-1.5秒 — `chat.py:136-142`
+- **MCPサーバーはキャッシュなし**: `create_server_triple()`は毎リクエストで新規サブプロセスを起動
+- **改善候補（未実施）**: effort変更、MCP並列起動、MCPプーリング、DBクエリ非同期化
+
+## ask_user回答のDB永続化（内部イベントパターン）
+- **問題**: バックエンドの`activity_items`にユーザー回答(responses)が含まれないままDB保存されていた
+- **原因**: ask_userイベント発行時点では未回答。フロントのrespondToQuestionsはReact stateのみ更新。バックエンドのactivity_itemsには反映されない
+- **修正パターン**: `_ask_user_responses` 内部イベント（`_context_items`と同パターン）
+  1. `agent_service.py`: ask_userツール関数が回答取得後に `emit_event({"type": "_ask_user_responses", "group_id": ..., "responses": ...})` を送信
+  2. `chat.py`: `_ask_user_responses` イベントをインターセプト → activity_items内の該当ask_userアイテムに`responses`を書き戻し → `continue`でクライアントには送信しない
+  3. `types.ts`: `ActivityItemRecord`に`responses?: Record<string, string>`を追加
+- **DB復元時**: `page.tsx`の`restoreActivityItems()`がスプレッド演算子で全フィールド保持 → `responses`が含まれていれば`ChatMessage.tsx`で`isAnswered=true`判定 → `AnsweredView`表示
+- **実装ファイル**:
+  - `backend/app/services/agent_service.py` — `_ask_user_responses`イベントemit（行100-108）
+  - `backend/app/routers/chat.py` — `_ask_user_responses`インターセプト（行209-217）
+  - `frontend/lib/types.ts` — `ActivityItemRecord.responses`フィールド追加（行152）
+
 ## Important Notes
 - The OpenAI Agents SDK reads OPENAI_API_KEY from os.environ (set in main.py)
 - MCP servers use stdio transport (MCPServerStdio / MCPServerStdioParams)
@@ -369,6 +405,11 @@ Dashboard (flex)
 - **何をやった**: 最初のレスポンシブ修正でフォントサイズとパディングの調整だけ行った
 - **何が悪かった**: 根本原因（flexの`min-w-0`欠如、`w-full`テーブル問題）を見逃し、表面的なサイズ調整だけした。結果、テーブルが画面外にはみ出したまま
 - **次からどうする**: レスポンシブ対応では「コンテンツが画面幅を超えないこと」を最優先で確認する。まずoverflowの制約チェーン（min-w-0, overflow-hidden）を確保してから、サイズ調整に入る
+
+### CLAUDE.mdの更新をまた忘れた（3回目）
+- **何をやった**: レイテンシ調査、ThinkingIndicator設計・実装、ask_user不具合調査と大量の作業をしたのにCLAUDE.mdを一切更新しなかった
+- **何が悪かった**: 運用ルール8番を再び違反。ユーザーに「記憶更新してる？忘れてるよね？」と指摘された
+- **次からどうする**: **コード変更・新発見のたびにリアルタイムで更新する**。1つの機能実装が終わるたびに即座にCLAUDE.mdに追記。セッション最後にまとめて書くのは禁止
 
 ### マイグレーションファイルの配置を間違えた
 - **何をやった**: `backend/migrations/add_activity_items.sql` にマイグレーションを作成した
