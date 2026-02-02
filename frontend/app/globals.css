@@ -214,6 +214,61 @@
   margin-bottom: 1.5rem;
 }
 
+/* ── Thinking Indicator ── */
+.thinking-indicator {
+  animation: thinking-enter 300ms ease-out both;
+}
+
+@keyframes thinking-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.thinking-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: #c0c4cc;
+  animation: thinking-pulse 1.4s ease-in-out infinite;
+}
+
+.thinking-dot-1 { animation-delay: 0s; }
+.thinking-dot-2 { animation-delay: 0.2s; }
+.thinking-dot-3 { animation-delay: 0.4s; }
+
+@keyframes thinking-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+.thinking-label {
+  animation: thinking-label-in 300ms ease-out both;
+}
+
+@keyframes thinking-label-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-indicator {
+    animation: none;
+  }
+  .thinking-dot {
+    animation: none;
+    opacity: 0.6;
+  }
+  .thinking-label {
+    animation: none;
+  }
+}
+
 /* ── Safe area for mobile devices with notch ── */
 @supports (padding: env(safe-area-inset-bottom)) {
   .safe-bottom {

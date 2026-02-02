@@ -15,6 +15,7 @@ import type {
 } from "@/lib/types";
 import { AskUserPrompt } from "./AskUserPrompt";
 import { ChartRenderer } from "./charts/ChartRenderer";
+import { ThinkingIndicator } from "./ThinkingIndicator";
 import { Wrench, Loader2, BarChart3, Search, Database, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
@@ -596,6 +597,9 @@ function AssistantMessage({
   const items = message.activityItems || [];
   const hasTextItems = items.some((it) => it.kind === "text");
 
+  // Phase 1: streaming started but no events received yet
+  const showThinking = !!message.isStreaming && items.length === 0 && !message.content;
+
   // --- New interleaved mode: text segments are in activityItems ---
   if (hasTextItems) {
     return (
@@ -613,26 +617,32 @@ function AssistantMessage({
   // --- Legacy mode: text in message.content, activity items separate ---
   return (
     <div className="assistant-response overflow-hidden min-w-0">
-      <LegacyActivityTimeline
-        items={items}
-        isStreaming={message.isStreaming}
-        pendingQuestionGroup={pendingQuestionGroup}
-        onRespondToQuestions={onRespondToQuestions}
-      />
+      {showThinking ? (
+        <ThinkingIndicator />
+      ) : (
+        <>
+          <LegacyActivityTimeline
+            items={items}
+            isStreaming={message.isStreaming}
+            pendingQuestionGroup={pendingQuestionGroup}
+            onRespondToQuestions={onRespondToQuestions}
+          />
 
-      <div className="report-content overflow-hidden min-w-0">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          rehypePlugins={[rehypeRaw]}
-          components={markdownComponents}
-        >
-          {message.content || (message.isStreaming ? "" : "...")}
-        </ReactMarkdown>
+          <div className="report-content overflow-hidden min-w-0">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeRaw]}
+              components={markdownComponents}
+            >
+              {message.content || (message.isStreaming ? "" : "...")}
+            </ReactMarkdown>
 
-        {message.isStreaming && (
-          <span className="inline-block w-0.5 h-5 bg-[#e94560] animate-pulse ml-0.5 align-middle rounded-full" />
-        )}
-      </div>
+            {message.isStreaming && (
+              <span className="inline-block w-0.5 h-5 bg-[#e94560] animate-pulse ml-0.5 align-middle rounded-full" />
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
