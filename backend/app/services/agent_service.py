@@ -110,83 +110,85 @@ GA4 property_id: {property_id}
         property_id: str,
         conversation_history: list[dict] | None = None,
     ) -> AsyncGenerator[dict, None]:
-        ga4_server = self.mcp_manager.create_ga4_server(user_id, refresh_token)
-        gsc_server = self.mcp_manager.create_gsc_server(user_id, refresh_token)
+        pair = self.mcp_manager.create_server_pair(user_id, refresh_token)
 
-        async with AsyncExitStack() as stack:
-            await stack.enter_async_context(ga4_server)
-            await stack.enter_async_context(gsc_server)
+        try:
+            async with AsyncExitStack() as stack:
+                await stack.enter_async_context(pair.ga4_server)
+                await stack.enter_async_context(pair.gsc_server)
 
-            agent = Agent(
-                name="GA4 & GSC Analytics Agent",
-                instructions=self._build_system_prompt(property_id),
-                model="gpt-5.2",
-                mcp_servers=[ga4_server, gsc_server],
-                model_settings=ModelSettings(
-                    reasoning=Reasoning(effort="medium", summary="detailed"),
-                    verbosity="low",
-                ),
-            )
+                agent = Agent(
+                    name="GA4 & GSC Analytics Agent",
+                    instructions=self._build_system_prompt(property_id),
+                    model="gpt-5.2",
+                    mcp_servers=[pair.ga4_server, pair.gsc_server],
+                    model_settings=ModelSettings(
+                        reasoning=Reasoning(effort="medium", summary="detailed"),
+                        verbosity="low",
+                    ),
+                )
 
-            input_messages = []
-            if conversation_history:
-                input_messages.extend(conversation_history)
-            input_messages.append({"role": "user", "content": message})
+                input_messages = []
+                if conversation_history:
+                    input_messages.extend(conversation_history)
+                input_messages.append({"role": "user", "content": message})
 
-            result = Runner.run_streamed(agent, input=input_messages)
+                result = Runner.run_streamed(agent, input=input_messages)
 
-            async for event in result.stream_events():
-                if event.type == "raw_response_event":
-                    data = event.data
-                    event_type = getattr(data, "type", "")
-                    if event_type == "response.output_text.delta":
-                        delta = getattr(data, "delta", "")
-                        if delta:
-                            yield {"type": "text_delta", "content": delta}
-                    elif event_type == "response.created":
-                        yield {"type": "response_created"}
-                elif event.type == "run_item_stream_event":
-                    item = event.item
-                    if hasattr(item, "type"):
-                        if item.type == "tool_call_item":
-                            raw = item.raw_item
+                async for event in result.stream_events():
+                    if event.type == "raw_response_event":
+                        data = event.data
+                        event_type = getattr(data, "type", "")
+                        if event_type == "response.output_text.delta":
+                            delta = getattr(data, "delta", "")
+                            if delta:
+                                yield {"type": "text_delta", "content": delta}
+                        elif event_type == "response.created":
+                            yield {"type": "response_created"}
+                    elif event.type == "run_item_stream_event":
+                        item = event.item
+                        if hasattr(item, "type"):
+                            if item.type == "tool_call_item":
+                                raw = item.raw_item
+                                yield {
+                                    "type": "tool_call",
+                                    "call_id": getattr(raw, "call_id", None),
+                                    "name": getattr(raw, "name", "unknown"),
+                                    "arguments": getattr(raw, "arguments", ""),
+                                }
+                            elif item.type == "tool_call_output_item":
+                                raw = item.raw_item
+                                # raw_item is FunctionCallOutput (TypedDict)
+                                call_id = raw["call_id"] if isinstance(raw, dict) else getattr(raw, "call_id", None)
+                                yield {
+                                    "type": "tool_result",
+                                    "call_id": call_id,
+                                    "output": str(item.output)[:2000],
+                                }
+                        # ReasoningItem handling (isinstance check, not type string)
+                        if isinstance(item, ReasoningItem):
+                            summary_text = None
+                            if hasattr(item.raw_item, "summary") and item.raw_item.summary:
+                                texts = [
+                                    s.text
+                                    for s in item.raw_item.summary
+                                    if hasattr(s, "text") and s.text
+                                ]
+                                if texts:
+                                    summary_text = " ".join(texts)
+
+                            if summary_text:
+                                summary_text = await self._translate_to_japanese(summary_text)
+
                             yield {
-                                "type": "tool_call",
-                                "call_id": getattr(raw, "call_id", None),
-                                "name": getattr(raw, "name", "unknown"),
-                                "arguments": getattr(raw, "arguments", ""),
+                                "type": "reasoning",
+                                "content": summary_text or "分析中...",
+                                "has_summary": summary_text is not None,
                             }
-                        elif item.type == "tool_call_output_item":
-                            raw = item.raw_item
-                            # raw_item is FunctionCallOutput (TypedDict)
-                            call_id = raw["call_id"] if isinstance(raw, dict) else getattr(raw, "call_id", None)
-                            yield {
-                                "type": "tool_result",
-                                "call_id": call_id,
-                                "output": str(item.output)[:2000],
-                            }
-                    # ReasoningItem handling (isinstance check, not type string)
-                    if isinstance(item, ReasoningItem):
-                        summary_text = None
-                        if hasattr(item.raw_item, "summary") and item.raw_item.summary:
-                            texts = [
-                                s.text
-                                for s in item.raw_item.summary
-                                if hasattr(s, "text") and s.text
-                            ]
-                            if texts:
-                                summary_text = " ".join(texts)
 
-                        if summary_text:
-                            summary_text = await self._translate_to_japanese(summary_text)
-
-                        yield {
-                            "type": "reasoning",
-                            "content": summary_text or "分析中...",
-                            "has_summary": summary_text is not None,
-                        }
-
-            yield {"type": "done"}
+                yield {"type": "done"}
+        finally:
+            self.mcp_manager.cleanup_server_pair(pair)
 
     async def _translate_to_japanese(self, text: str) -> str:
         """英語の reasoning summary を Responses API で日本語に翻訳"""
@@ -210,66 +212,69 @@ GA4 property_id: {property_id}
         user_id: str,
         refresh_token: str,
     ) -> list[dict]:
-        mcp_server = self.mcp_manager.create_ga4_server(user_id, refresh_token)
+        mcp_server, creds_path = self.mcp_manager.create_ga4_server(user_id, refresh_token)
 
-        async with mcp_server:
-            tools = await mcp_server.list_tools()
-            get_summaries_tool = None
-            for tool in tools:
-                if tool.name == "get_account_summaries":
-                    get_summaries_tool = tool
-                    break
+        try:
+            async with mcp_server:
+                tools = await mcp_server.list_tools()
+                get_summaries_tool = None
+                for tool in tools:
+                    if tool.name == "get_account_summaries":
+                        get_summaries_tool = tool
+                        break
 
-            if not get_summaries_tool:
-                return []
+                if not get_summaries_tool:
+                    return []
 
-            result = await mcp_server.call_tool("get_account_summaries", {})
-            properties = []
+                result = await mcp_server.call_tool("get_account_summaries", {})
+                properties = []
 
-            if not result or not hasattr(result, "content"):
-                print("[Properties] No result or no content from MCP")
-                return []
+                if not result or not hasattr(result, "content"):
+                    print("[Properties] No result or no content from MCP")
+                    return []
 
-            for content_item in result.content:
-                if not hasattr(content_item, "text"):
-                    continue
+                for content_item in result.content:
+                    if not hasattr(content_item, "text"):
+                        continue
 
-                data = json.loads(content_item.text)
+                    data = json.loads(content_item.text)
 
-                accounts = []
-                if isinstance(data, dict):
-                    if "property_summaries" in data or "propertySummaries" in data:
-                        accounts = [data]
-                    elif "account_summaries" in data or "accountSummaries" in data:
-                        accounts = (
-                            data.get("account_summaries")
-                            or data.get("accountSummaries")
+                    accounts = []
+                    if isinstance(data, dict):
+                        if "property_summaries" in data or "propertySummaries" in data:
+                            accounts = [data]
+                        elif "account_summaries" in data or "accountSummaries" in data:
+                            accounts = (
+                                data.get("account_summaries")
+                                or data.get("accountSummaries")
+                                or []
+                            )
+                    elif isinstance(data, list):
+                        accounts = data
+
+                    for account in accounts:
+                        account_name = (
+                            account.get("display_name")
+                            or account.get("displayName")
+                            or account.get("account", "")
+                        )
+                        prop_summaries = (
+                            account.get("property_summaries")
+                            or account.get("propertySummaries")
                             or []
                         )
-                elif isinstance(data, list):
-                    accounts = data
+                        for prop in prop_summaries:
+                            properties.append({
+                                "property_id": prop.get("property", ""),
+                                "property_name": (
+                                    prop.get("display_name")
+                                    or prop.get("displayName")
+                                    or ""
+                                ),
+                                "account_name": account_name,
+                            })
 
-                for account in accounts:
-                    account_name = (
-                        account.get("display_name")
-                        or account.get("displayName")
-                        or account.get("account", "")
-                    )
-                    prop_summaries = (
-                        account.get("property_summaries")
-                        or account.get("propertySummaries")
-                        or []
-                    )
-                    for prop in prop_summaries:
-                        properties.append({
-                            "property_id": prop.get("property", ""),
-                            "property_name": (
-                                prop.get("display_name")
-                                or prop.get("displayName")
-                                or ""
-                            ),
-                            "account_name": account_name,
-                        })
-
-            print(f"[Properties] Extracted {len(properties)} properties")
-            return properties
+                print(f"[Properties] Extracted {len(properties)} properties")
+                return properties
+        finally:
+            self.mcp_manager.credentials_manager.cleanup_path(creds_path)

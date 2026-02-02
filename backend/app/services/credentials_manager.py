@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import tempfile
+import uuid
 
 
 class CredentialsManager:
@@ -16,10 +17,25 @@ class CredentialsManager:
         client_id: str,
         client_secret: str,
         quota_project_id: str = "",
+        purpose: str = "ga4",
     ) -> str:
-        user_dir = os.path.join(self.base_dir, user_id)
-        os.makedirs(user_dir, exist_ok=True)
-        creds_path = os.path.join(user_dir, "credentials.json")
+        """Create a credentials file for MCP subprocess use.
+
+        Each call creates a session-unique directory (UUID-based) to avoid
+        race conditions between concurrent requests for the same user, and
+        separates GA4/GSC files so GSC token refresh cannot corrupt GA4 ADC.
+
+        Args:
+            purpose: 'ga4' or 'gsc' — determines the filename so that
+                     GA4 (ADC via google.auth.default) and GSC (direct file read)
+                     never share the same file.
+        """
+        session_id = uuid.uuid4().hex[:12]
+        session_dir = os.path.join(self.base_dir, f"{user_id}_{session_id}")
+        os.makedirs(session_dir, exist_ok=True)
+
+        filename = f"{purpose}_credentials.json"
+        creds_path = os.path.join(session_dir, filename)
 
         creds = {
             "type": "authorized_user",
@@ -35,10 +51,21 @@ class CredentialsManager:
 
         return creds_path
 
+    def cleanup_path(self, creds_path: str):
+        """Remove the session directory containing the given credentials file."""
+        session_dir = os.path.dirname(creds_path)
+        if os.path.exists(session_dir) and session_dir.startswith(self.base_dir):
+            shutil.rmtree(session_dir, ignore_errors=True)
+
     def cleanup_user(self, user_id: str):
-        user_dir = os.path.join(self.base_dir, user_id)
-        if os.path.exists(user_dir):
-            shutil.rmtree(user_dir)
+        """Remove all session directories for a user (legacy compat)."""
+        if not os.path.exists(self.base_dir):
+            return
+        for entry in os.listdir(self.base_dir):
+            if entry.startswith(user_id):
+                path = os.path.join(self.base_dir, entry)
+                if os.path.isdir(path):
+                    shutil.rmtree(path, ignore_errors=True)
 
     def cleanup_all(self):
         if os.path.exists(self.base_dir):

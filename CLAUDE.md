@@ -48,6 +48,17 @@ frontend/  - Next.js 16 + React 19 + bun
 - SSE streaming from FastAPI to frontend via useChat hook
 - Clerk JWT verification via JWKS endpoint
 
+## Credentials管理アーキテクチャ（重要）
+- **永続ストレージ**: Supabase `users.google_refresh_token` にrefresh_tokenを保存（source of truth）
+- **一時ファイル**: MCP子プロセス用にリクエストごとにUUID付きディレクトリを作成し、セッション終了後にクリーンアップ
+  - パス: `/tmp/ga4-agent-credentials/{user_id}_{session_uuid}/`
+  - GA4用: `ga4_credentials.json`（`google.auth.default()` 経由で読まれる）
+  - GSC用: `gsc_credentials.json`（`GSC_TOKEN_FILE` 経由で読まれる）
+- **GA4とGSCは必ず別ファイル**: GSCサーバーがcredentialsリフレッシュ時にファイルを上書きするが、`Credentials.to_json()`は`type`フィールドを出力しない。GA4の`google.auth.default()`は`type`が必須なので、同じファイルを共有すると壊れる
+- **Cloud Run対応**: `/tmp`はCloud Runではインメモリファイルシステム。credentials は毎回Supabaseから取得→一時ファイル作成→リクエスト完了後削除。エフェメラルなコンテナでも問題なし
+- **セキュリティ**: 一時ファイルは`0o600`パーミッション。リクエスト完了時にfinally句で確実に削除
+- **同時リクエスト対応**: UUID付きディレクトリにより、同一ユーザーの並行リクエストでもファイル競合しない
+
 ## Environment Variables
 - Backend: `.env` in `backend/`
 - Frontend: `.env.local` in `frontend/`
@@ -99,6 +110,7 @@ frontend/  - Next.js 16 + React 19 + bun
 - **401 CLERK_JWKS_URL must be set**: Cloud RunにClerk環境変数が未設定だった → 設定で解決
 - **[Errno 2] No such file or directory (analytics-mcp)**: pyproject.tomlにanalytics-mcpが依存関係として未記載だった → `analytics-mcp>=0.1.1` を追加して解決
 - **ツールバッジが完了にならない問題**: `tool_result`のマッチングが「配列の最後の要素」固定だったため、複数ツール呼び出し時に先行ツールが永久にローディング状態になった。原因: バックエンドが`call_id`を送信しておらず、フロントが結果をどのツールに紐付けるか判別不能だった。修正: (1) バックエンドで`ToolCallItem.raw_item.call_id`と`ToolCallOutputItem.raw_item["call_id"]`を送信、(2) フロントで`call_id`ベースのマッチング、(3) `done`イベント時に未完了ツールを全て完了扱い
+- **GA4 run_report「Type is None」エラー**: GSCサーバーがcredentialsリフレッシュ時に同一ファイルを`Credentials.to_json()`で上書き → `type`フィールドが消失 → GA4の`google.auth.default()`が「Type is None」で失敗。修正: (1) GA4とGSCで別ファイルに分離、(2) GSCの書き戻しで`type`フィールドを保持、(3) UUID付きセッションディレクトリで競合回避、(4) finally句でクリーンアップ
 
 ## GPT-5.2 Reasoning Configuration
 - GPT-5.2はreasoning effortパラメータをサポート: `none`, `low`, `medium`, `high`, `xhigh`

@@ -30,6 +30,15 @@ class MCPSession:
         self.last_used = time.time()
 
 
+@dataclass
+class MCPServerPair:
+    """A pair of GA4 + GSC MCP servers with their credential paths for cleanup."""
+    ga4_server: MCPServerStdio
+    gsc_server: MCPServerStdio
+    ga4_creds_path: str
+    gsc_creds_path: str
+
+
 class MCPSessionManager:
     def __init__(self, credentials_manager: CredentialsManager):
         self.credentials_manager = credentials_manager
@@ -41,7 +50,7 @@ class MCPSessionManager:
             self._locks[user_id] = asyncio.Lock()
         return self._locks[user_id]
 
-    def _get_creds_path(self, user_id: str, refresh_token: str) -> str:
+    def _create_creds(self, user_id: str, refresh_token: str, purpose: str) -> str:
         settings = get_settings()
         return self.credentials_manager.create_credentials_file(
             user_id=user_id,
@@ -49,12 +58,14 @@ class MCPSessionManager:
             client_id=settings.google_oauth_client_id,
             client_secret=settings.google_oauth_client_secret,
             quota_project_id=settings.google_project_id,
+            purpose=purpose,
         )
 
-    def create_ga4_server(self, user_id: str, refresh_token: str) -> MCPServerStdio:
+    def create_ga4_server(self, user_id: str, refresh_token: str) -> tuple[MCPServerStdio, str]:
+        """Create GA4 MCP server. Returns (server, creds_path) for cleanup."""
         settings = get_settings()
-        creds_path = self._get_creds_path(user_id, refresh_token)
-        return MCPServerStdio(
+        creds_path = self._create_creds(user_id, refresh_token, purpose="ga4")
+        server = MCPServerStdio(
             params=MCPServerStdioParams(
                 command="analytics-mcp",
                 args=[],
@@ -68,10 +79,12 @@ class MCPSessionManager:
             cache_tools_list=True,
             client_session_timeout_seconds=30,
         )
+        return server, creds_path
 
-    def create_gsc_server(self, user_id: str, refresh_token: str) -> MCPServerStdio:
-        creds_path = self._get_creds_path(user_id, refresh_token)
-        return MCPServerStdio(
+    def create_gsc_server(self, user_id: str, refresh_token: str) -> tuple[MCPServerStdio, str]:
+        """Create GSC MCP server. Returns (server, creds_path) for cleanup."""
+        creds_path = self._create_creds(user_id, refresh_token, purpose="gsc")
+        server = MCPServerStdio(
             params=MCPServerStdioParams(
                 command=sys.executable,
                 args=[GSC_SERVER_SCRIPT],
@@ -82,9 +95,26 @@ class MCPSessionManager:
             cache_tools_list=True,
             client_session_timeout_seconds=30,
         )
+        return server, creds_path
+
+    def create_server_pair(self, user_id: str, refresh_token: str) -> MCPServerPair:
+        """Create both GA4 and GSC servers with separate credential files."""
+        ga4_server, ga4_creds = self.create_ga4_server(user_id, refresh_token)
+        gsc_server, gsc_creds = self.create_gsc_server(user_id, refresh_token)
+        return MCPServerPair(
+            ga4_server=ga4_server,
+            gsc_server=gsc_server,
+            ga4_creds_path=ga4_creds,
+            gsc_creds_path=gsc_creds,
+        )
+
+    def cleanup_server_pair(self, pair: MCPServerPair):
+        """Clean up credential files for a server pair."""
+        self.credentials_manager.cleanup_path(pair.ga4_creds_path)
+        self.credentials_manager.cleanup_path(pair.gsc_creds_path)
 
     # Backward compat alias
-    def create_mcp_server(self, user_id: str, refresh_token: str) -> MCPServerStdio:
+    def create_mcp_server(self, user_id: str, refresh_token: str) -> tuple[MCPServerStdio, str]:
         return self.create_ga4_server(user_id, refresh_token)
 
     async def cleanup_expired(self):

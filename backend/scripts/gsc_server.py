@@ -42,8 +42,12 @@ def get_gsc_service():
 
     if creds and creds.expired and creds.refresh_token:
         creds.refresh(Request())
+        # creds.to_json() omits "type" field, which breaks google.auth.default().
+        # Reconstruct the file manually to preserve the authorized_user format.
+        refreshed_data = json.loads(creds.to_json())
+        refreshed_data["type"] = "authorized_user"
         with open(TOKEN_FILE, "w") as f:
-            f.write(creds.to_json())
+            json.dump(refreshed_data, f)
 
     if not creds or not creds.valid:
         raise RuntimeError("GSC credentials are invalid and cannot be refreshed.")
