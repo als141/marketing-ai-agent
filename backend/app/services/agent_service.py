@@ -1,10 +1,17 @@
 import json
+import logging
 from contextlib import AsyncExitStack
 from typing import AsyncGenerator
 from agents import Agent, Runner, ModelSettings
+from agents.items import ReasoningItem
+from openai import AsyncOpenAI
 from openai.types.shared import Reasoning
 
+from app.config import get_settings
 from app.services.mcp_manager import MCPSessionManager
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
 
 
 class AgentService:
@@ -116,7 +123,7 @@ GA4 property_id: {property_id}
                 model="gpt-5.2",
                 mcp_servers=[ga4_server, gsc_server],
                 model_settings=ModelSettings(
-                    reasoning=Reasoning(effort="medium"),
+                    reasoning=Reasoning(effort="medium", summary="detailed"),
                     verbosity="low",
                 ),
             )
@@ -153,8 +160,45 @@ GA4 property_id: {property_id}
                                 "type": "tool_result",
                                 "output": str(item.output)[:2000],
                             }
+                    # ReasoningItem handling (isinstance check, not type string)
+                    if isinstance(item, ReasoningItem):
+                        summary_text = None
+                        if hasattr(item.raw_item, "summary") and item.raw_item.summary:
+                            texts = [
+                                s.text
+                                for s in item.raw_item.summary
+                                if hasattr(s, "text") and s.text
+                            ]
+                            if texts:
+                                summary_text = " ".join(texts)
+
+                        if summary_text:
+                            summary_text = await self._translate_to_japanese(summary_text)
+
+                        yield {
+                            "type": "reasoning",
+                            "content": summary_text or "分析中...",
+                            "has_summary": summary_text is not None,
+                        }
 
             yield {"type": "done"}
+
+    async def _translate_to_japanese(self, text: str) -> str:
+        """英語の reasoning summary を Responses API で日本語に翻訳"""
+        try:
+            client = AsyncOpenAI(api_key=settings.openai_api_key)
+            response = await client.responses.create(
+                model=settings.reasoning_translate_model,
+                instructions="Translate the following text to Japanese. Output ONLY the translated text, nothing else. Keep any markdown formatting intact.",
+                input=text,
+                reasoning={"effort": "minimal", "summary": None},
+                text={"verbosity": "low"},
+                store=False,
+            )
+            return response.output_text or text
+        except Exception as e:
+            logger.warning(f"Reasoning summary 翻訳失敗、原文を使用: {e}")
+            return text
 
     async def list_properties(
         self,

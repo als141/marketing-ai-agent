@@ -3,6 +3,7 @@ export interface Message {
   role: "user" | "assistant";
   content: string;
   toolCalls?: ToolCall[];
+  reasoningMessages?: string[];
   isStreaming?: boolean;
 }
 
@@ -47,6 +48,7 @@ export interface StreamEvent {
     | "text_delta"
     | "tool_call"
     | "tool_result"
+    | "reasoning"
     | "done"
     | "error"
     | "response_created";
@@ -56,4 +58,5 @@ export interface StreamEvent {
   output?: string;
   message?: string;
   conversation_id?: string;
+  has_summary?: boolean;
 }

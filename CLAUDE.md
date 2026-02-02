@@ -122,7 +122,22 @@ frontend/  - Next.js 16 + React 19 + bun
   - `summary`: "auto" | "concise" | "detailed"
 - `ModelSettings` の主要フィールド: temperature, top_p, max_tokens, reasoning, verbosity, parallel_tool_calls, truncation
 - 価格: 入力$1.75/1M tokens, 出力$14/1M tokens (キャッシュ入力90%割引)
-- **現在の設定**: `effort="medium"`, `verbosity="low"`
+- **現在の設定**: `effort="medium"`, `summary="detailed"`, `verbosity="low"`
+
+## Reasoning Summary（思考過程サマリ）表示
+- GPT-5.2の`summary="detailed"`設定で、推論過程のサマリテキストが`ReasoningItem`として返される
+- バックエンドで`ReasoningItem`を検出し、`item.raw_item.summary`からテキストを抽出
+- 英語のサマリは`gpt-5-nano`（`REASONING_TRANSLATE_MODEL`環境変数で変更可）+ `effort="minimal"` で日本語に翻訳（~111トークン/回、推論トークン0）
+- SSEで`{"type": "reasoning", "content": "日本語サマリ", "has_summary": true}`として送信
+- フロントエンドでは:
+  - ストリーミング中: 最新の思考内容を紫の`Sparkles`アイコン付きでリアルタイム表示
+  - 完了後: 「思考過程 (N)」として折りたたみ表示（クリックで展開）
+  - 表示位置: ツールバッジの上（アシスタントメッセージの最上部）
+- **実装ファイル**:
+  - バックエンド: `backend/app/services/agent_service.py`（`ReasoningItem`処理 + `_translate_to_japanese()`）
+  - フロントエンド: `frontend/app/dashboard/components/ChatMessage.tsx`（`ReasoningSummary`コンポーネント）
+  - 型定義: `frontend/lib/types.ts`（`Message.reasoningMessages`, `StreamEvent.reasoning`）
+  - Hook: `frontend/lib/hooks/useChat.ts`（`reasoning`イベントハンドリング）
 - **情報ソース**:
   - OpenAI Agents SDK ドキュメント: https://openai.github.io/openai-agents-python/models/
   - GPT-5.2 モデルページ: https://platform.openai.com/docs/models/gpt-5.2

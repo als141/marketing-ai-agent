@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     google_project_id: str = ""
 
     openai_api_key: str = ""
+    reasoning_translate_model: str = "gpt-5-nano"
 
     frontend_url: str = "http://localhost:3000"
     backend_url: str = "http://localhost:8000"

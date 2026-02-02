@@ -4,7 +4,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import type { Message } from "@/lib/types";
-import { Wrench, Loader2, BarChart3, Search, Database } from "lucide-react";
+import { Wrench, Loader2, BarChart3, Search, Database, ChevronRight } from "lucide-react";
+import { useState } from "react";
 
 interface Props {
   message: Message;
@@ -99,9 +100,72 @@ function UserMessage({ message }: { message: Message }) {
   );
 }
 
+function ReasoningSummary({
+  messages,
+  isStreaming,
+}: {
+  messages: string[];
+  isStreaming?: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  if (!messages || messages.length === 0) return null;
+
+  // ストリーミング中: 最新の思考内容を薄く表示
+  if (isStreaming) {
+    const latest = messages[messages.length - 1];
+    return (
+      <div className="mb-2.5 sm:mb-3">
+        <div className="flex items-start gap-2">
+          <span className="shrink-0 mt-[3px] w-[3px] h-[3px] rounded-full bg-[#9ca3af] animate-pulse" />
+          <p className="text-[11px] text-[#9ca3af] leading-relaxed tracking-[0.01em]">
+            {latest}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // 完了後: 折りたたみ式のトレースログ
+  return (
+    <div className="mb-2.5 sm:mb-3">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="group inline-flex items-center gap-1 text-[11px] text-[#b0b5bd] hover:text-[#6b7280] transition-colors cursor-pointer"
+      >
+        <ChevronRight
+          className={`w-2.5 h-2.5 transition-transform duration-150 ${
+            isOpen ? "rotate-90" : ""
+          }`}
+        />
+        <span className="tracking-wide">
+          思考過程
+        </span>
+        <span className="opacity-60 tabular-nums">{messages.length}</span>
+      </button>
+      {isOpen && (
+        <div className="mt-1.5 ml-[14px] space-y-1 border-l border-[#e5e7eb] pl-2.5">
+          {messages.map((msg, i) => (
+            <p
+              key={i}
+              className="text-[11px] text-[#9ca3af] leading-relaxed"
+            >
+              {msg}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AssistantMessage({ message }: { message: Message }) {
   return (
     <div className="assistant-response overflow-hidden min-w-0">
+      <ReasoningSummary
+        messages={message.reasoningMessages || []}
+        isStreaming={message.isStreaming}
+      />
       <ToolCallBadges toolCalls={message.toolCalls} />
 
       <div className="report-content overflow-hidden min-w-0">

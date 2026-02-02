@@ -42,6 +42,7 @@ export function useChat(propertyId: string) {
           content: "",
           isStreaming: true,
           toolCalls: [],
+          reasoningMessages: [],
         },
       ]);
 
@@ -123,6 +124,20 @@ export function useChat(propertyId: string) {
                   }
                   return { ...m, toolCalls: calls };
                 })
+              );
+            } else if (event.type === "reasoning" && event.content) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? {
+                        ...m,
+                        reasoningMessages: [
+                          ...(m.reasoningMessages || []),
+                          event.content!,
+                        ],
+                      }
+                    : m
+                )
               );
             } else if (event.type === "done") {
               if (event.conversation_id) {
