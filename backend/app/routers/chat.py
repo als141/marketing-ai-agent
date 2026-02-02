@@ -1,4 +1,5 @@
 import json
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -67,22 +68,35 @@ async def stream_chat(
         }
     ).execute()
 
-    # Load conversation history
-    msg_result = (
-        supabase.table("messages")
-        .select("role, content")
-        .eq("conversation_id", conversation_id)
-        .order("created_at")
+    # Load conversation context: prefer context_items (full Responses API format)
+    # over plain role+content history
+    conv_data = (
+        supabase.table("conversations")
+        .select("context_items")
+        .eq("id", conversation_id)
+        .single()
         .execute()
     )
-    history = [
-        {"role": m["role"], "content": m["content"]}
-        for m in msg_result.data
-        if m["role"] in ("user", "assistant")
-    ]
-    # Remove the last user message since agent_service adds it
-    if history and history[-1]["role"] == "user":
-        history = history[:-1]
+    saved_context_items = conv_data.data.get("context_items") if conv_data.data else None
+
+    # Fallback: plain history if no context_items saved yet
+    history = None
+    if not saved_context_items:
+        msg_result = (
+            supabase.table("messages")
+            .select("role, content")
+            .eq("conversation_id", conversation_id)
+            .order("created_at")
+            .execute()
+        )
+        history = [
+            {"role": m["role"], "content": m["content"]}
+            for m in msg_result.data
+            if m["role"] in ("user", "assistant")
+        ]
+        # Remove the last user message since agent_service adds it
+        if history and history[-1]["role"] == "user":
+            history = history[:-1]
 
     agent_service = get_agent_service()
 
@@ -96,6 +110,7 @@ async def stream_chat(
                 message=body.message,
                 property_id=body.property_id,
                 conversation_history=history,
+                context_items=saved_context_items,
             ):
                 if await request.is_disconnected():
                     break
@@ -108,6 +123,18 @@ async def stream_chat(
                     event["content"] = translated
                 # Remove internal flag before sending
                 event.pop("_needs_translation", None)
+
+                # Intercept internal _context_items — save to DB, don't send to client
+                if event["type"] == "_context_items":
+                    try:
+                        supabase.table("conversations").update(
+                            {"context_items": event["items"]}
+                        ).eq("id", conversation_id).execute()
+                    except Exception as e:
+                        logging.getLogger(__name__).warning(
+                            f"Failed to save context_items: {e}"
+                        )
+                    continue
 
                 if event["type"] == "text_delta":
                     full_response += event.get("content", "")

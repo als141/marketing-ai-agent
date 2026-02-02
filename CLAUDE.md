@@ -196,6 +196,24 @@ frontend/  - Next.js 16 + React 19 + bun
   - SDK `@function_tool`: `backend/.venv/lib/python3.12/site-packages/agents/tool.py`
 - **注意**: Cloud Runでは`AskUserStore`はインメモリなのでインスタンス間で共有不可。単一インスタンス運用が前提。
 
+## 会話履歴管理（A案: to_input_list + DB）
+- **方式**: 各ターン完了後に `result.to_input_list()` で全会話コンテキスト（ツールコール、ツール結果、推論アイテム含む）をResponses API入力形式で取得し、`conversations.context_items` (JSONB) に保存
+- **次ターンの入力**: `context_items` が存在すれば `context_items + [新ユーザーメッセージ]` を Runner の input に渡す。なければ従来の `role+content` historyにフォールバック
+- **表示用メッセージ**: 従来通り `messages` テーブルに `role+content` で保存（UIの会話履歴表示用）
+- **DB変更**: `conversations` テーブルに `context_items JSONB` カラム追加が必要
+  - マイグレーション: `backend/migrations/add_context_items.sql`
+  - Supabase SQL Editor で手動実行: `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS context_items JSONB;`
+- **シリアライズ**: `_serialize_input_list()` ヘルパーで TypedDict/Pydantic を dict に変換
+- **内部イベント**: `_context_items` タイプのイベントは `chat.py` でインターセプトしDB保存、クライアントには送信しない
+- **コンテキスト圧縮**: 未実装。将来的に `openai_responses_compaction_session` または手動 compact API で対応予定
+- **実装ファイル**:
+  - `backend/app/services/agent_service.py` — `stream_chat()` に `context_items` パラメータ追加、ポンプ完了後に `to_input_list()` → `_context_items` イベント yield
+  - `backend/app/routers/chat.py` — `context_items` のDB保存/読み込み、`_context_items` イベントのインターセプト
+- **情報ソース**:
+  - SDK `to_input_list()`: `backend/.venv/lib/python3.12/site-packages/agents/result.py:125`
+  - SDK `ItemHelpers.input_to_new_input_list()`: `backend/.venv/lib/python3.12/site-packages/agents/items.py`
+  - REPL参考実装: `backend/.venv/lib/python3.12/site-packages/agents/repl.py:66`
+
 ## Important Notes
 - The OpenAI Agents SDK reads OPENAI_API_KEY from os.environ (set in main.py)
 - MCP servers use stdio transport (MCPServerStdio / MCPServerStdioParams)

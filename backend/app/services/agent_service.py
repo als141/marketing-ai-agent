@@ -22,6 +22,22 @@ settings = get_settings()
 _SENTINEL = object()
 
 
+def _serialize_input_list(items: list) -> list[dict]:
+    """Convert to_input_list() output into JSON-serializable dicts."""
+    result = []
+    for item in items:
+        if isinstance(item, dict):
+            result.append(item)
+        elif hasattr(item, "model_dump"):
+            result.append(item.model_dump(exclude_none=True))
+        elif hasattr(item, "__dict__"):
+            result.append({k: v for k, v in item.__dict__.items() if v is not None})
+        else:
+            # Fallback — try json round-trip
+            result.append(json.loads(json.dumps(item, default=str)))
+    return result
+
+
 @dataclass
 class ChatContext:
     """Custom context passed to tool functions via ToolContext[ChatContext]."""
@@ -208,6 +224,7 @@ GA4 property_id: {property_id}
         message: str,
         property_id: str,
         conversation_history: list[dict] | None = None,
+        context_items: list[dict] | None = None,
     ) -> AsyncGenerator[dict, None]:
         pair = self.mcp_manager.create_server_pair(user_id, refresh_token)
 
@@ -241,10 +258,17 @@ GA4 property_id: {property_id}
                     ),
                 )
 
-                input_messages = []
-                if conversation_history:
-                    input_messages.extend(conversation_history)
-                input_messages.append({"role": "user", "content": message})
+                # Build input: prefer context_items (full Responses API format)
+                # over plain conversation_history (role+content only)
+                if context_items:
+                    input_messages = context_items + [
+                        {"role": "user", "content": message}
+                    ]
+                else:
+                    input_messages = []
+                    if conversation_history:
+                        input_messages.extend(conversation_history)
+                    input_messages.append({"role": "user", "content": message})
 
                 result = Runner.run_streamed(
                     agent, input=input_messages, context=chat_context,
@@ -280,6 +304,15 @@ GA4 property_id: {property_id}
                             await pump_task
                         except (asyncio.CancelledError, Exception):
                             pass
+
+                # Extract full conversation context for next turn
+                try:
+                    full_context = result.to_input_list()
+                    # Serialize to JSON-safe dicts
+                    serialized = _serialize_input_list(full_context)
+                    yield {"type": "_context_items", "items": serialized}
+                except Exception as e:
+                    logger.warning(f"Failed to serialize context_items: {e}")
 
                 yield {"type": "done"}
         finally:
