@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     meta_ads_enabled: bool = False
     meta_access_token: str = ""
 
+    # WordPress MCP
+    wordpress_enabled: bool = False
+
     frontend_url: str = "http://localhost:3000"
     backend_url: str = "http://localhost:8000"
 
@@ -45,11 +48,16 @@ class Settings(BaseSettings):
     def get_wordpress_sites(self) -> list[WordPressSite]:
         """Parse WORDPRESS_*_MCP_SERVER_URL / WORDPRESS_*_MCP_AUTHORIZATION pairs from env.
 
+        Requires WORDPRESS_ENABLED=true to return any sites.
+
         Naming convention:
           WORDPRESS_MCP_SERVER_URL + WORDPRESS_MCP_AUTHORIZATION          → label "wordpress"
           WORDPRESS_ACHIEVE_MCP_SERVER_URL + WORDPRESS_ACHIEVE_MCP_AUTHORIZATION → label "wordpress_achieve"
           WORDPRESS_FOO_MCP_SERVER_URL + WORDPRESS_FOO_MCP_AUTHORIZATION  → label "wordpress_foo"
         """
+        if not self.wordpress_enabled:
+            return []
+
         sites: list[WordPressSite] = []
         suffix = "_MCP_SERVER_URL"
 

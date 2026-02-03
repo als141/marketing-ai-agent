@@ -9,6 +9,7 @@ from agents.mcp.server import MCPServerStdioParams, MCPServerStreamableHttpParam
 from app.config import get_settings
 from app.services.credentials_manager import CredentialsManager
 from app.services.compact_mcp import CompactMCPServer
+from app.services.prefixed_mcp import PrefixedMCPServer
 
 SESSION_TIMEOUT_SECONDS = 600  # 10 minutes
 
@@ -39,7 +40,7 @@ class MCPServerPair:
     ga4_creds_path: str
     gsc_creds_path: str
     meta_ads_server: MCPServerStdio | None = None
-    wordpress_servers: list[MCPServerStreamableHttp] = field(default_factory=list)
+    wordpress_servers: list = field(default_factory=list)
 
 
 class MCPSessionManager:
@@ -118,13 +119,18 @@ class MCPSessionManager:
         )
         return server
 
-    def create_wordpress_servers(self) -> list[MCPServerStreamableHttp]:
-        """Create WordPress MCP servers from environment variables."""
+    def create_wordpress_servers(self) -> list:
+        """Create WordPress MCP servers from environment variables.
+        When multiple sites exist, wraps each with PrefixedMCPServer to avoid
+        duplicate tool names (e.g. achieve__wp-mcp-get-posts-by-category)."""
         settings = get_settings()
         sites = settings.get_wordpress_sites()
+        print(f"[WordPress MCP] wordpress_enabled={settings.wordpress_enabled}, sites found: {len(sites)}")
         servers = []
+        need_prefix = len(sites) > 1
         for site in sites:
-            server = MCPServerStreamableHttp(
+            print(f"[WordPress MCP] Creating server: {site.label} -> {site.server_url}")
+            raw_server = MCPServerStreamableHttp(
                 params=MCPServerStreamableHttpParams(
                     url=site.server_url,
                     headers={"Authorization": site.authorization},
@@ -132,6 +138,14 @@ class MCPSessionManager:
                 cache_tools_list=True,
                 client_session_timeout_seconds=120,
             )
+            if need_prefix:
+                # Extract short prefix from label: "wordpress" -> "wp", "wordpress_achieve" -> "achieve"
+                parts = site.label.split("_", 1)
+                prefix = parts[1] if len(parts) > 1 else "wp"
+                server = PrefixedMCPServer(raw_server, prefix=prefix)
+                print(f"[WordPress MCP] Prefixed: {prefix}__<tool_name>")
+            else:
+                server = raw_server
             servers.append(server)
         return servers
 

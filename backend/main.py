@@ -1,8 +1,11 @@
 import asyncio
 import os
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+load_dotenv()  # Load .env into os.environ (needed for dynamic env parsing like WordPress sites)
 
 from app.config import get_settings
 from app.deps import get_mcp_manager

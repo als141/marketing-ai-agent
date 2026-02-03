@@ -78,7 +78,8 @@ frontend/  - Next.js 16 + React 19 + bun
   - `backend/app/services/agent_service.py` — Meta Ads MCPの接続 + システムプロンプト動的拡張
 
 ## WordPress MCP（オプション機能・複数サイト対応）
-- **有効化**: 環境変数 `WORDPRESS_{LABEL}_MCP_SERVER_URL` + `WORDPRESS_{LABEL}_MCP_AUTHORIZATION` のペアを設定
+- **有効化**: `WORDPRESS_ENABLED=true` + `WORDPRESS_{LABEL}_MCP_SERVER_URL` + `WORDPRESS_{LABEL}_MCP_AUTHORIZATION` のペアを設定
+- **デフォルト無効**: `WORDPRESS_ENABLED=false`（未設定時も無効）
 - **命名規則**:
   - `WORDPRESS_MCP_SERVER_URL` + `WORDPRESS_MCP_AUTHORIZATION` → label "wordpress"
   - `WORDPRESS_ACHIEVE_MCP_SERVER_URL` + `WORDPRESS_ACHIEVE_MCP_AUTHORIZATION` → label "wordpress_achieve"

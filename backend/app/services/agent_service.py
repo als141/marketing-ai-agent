@@ -204,17 +204,22 @@ class AgentService:
         wordpress_section = ""
         if wordpress_labels:
             sites_list = ", ".join(wordpress_labels)
+            prefix_note = ""
+            if len(wordpress_labels) > 1:
+                prefix_note = """
+- **複数サイト接続時のツール名規則**: ツール名に `{prefix}__` プレフィックスが付く。
+  - 例: `wp__wp-mcp-get-posts-by-category` (1つ目のサイト), `achieve__wp-mcp-get-posts-by-category` (achieveサイト)
+  - 操作対象サイトに対応するプレフィックス付きツールを使え。"""
             wordpress_section = f"""
 
 ## WordPress MCP ツール使用ルール
 - 接続中のWordPressサイト: {sites_list}
-- WordPressの投稿・固定ページの取得、作成、更新、削除が可能。
+- WordPressの投稿・固定ページの取得、作成、更新、削除が可能。{prefix_note}
 - 主なツール（WordPress MCP Adapter が提供するツール名はサーバーによって異なる場合がある。`list_tools` の結果に従え）:
   - 投稿一覧取得 / 投稿作成 / 投稿更新 / 投稿削除
   - 固定ページ一覧取得 / 固定ページ作成・更新
   - カテゴリ・タグ管理
   - メディア管理
-- 複数サイト接続時は、ツール名やパラメータでどのサイトに対する操作かを判別せよ。
 - SEO記事作成のワークフロー: GSCで検索クエリ分析 → キーワード選定 → WordPress投稿作成。
 """
 
@@ -377,8 +382,12 @@ GA4 property_id: {property_id}
                 await stack.enter_async_context(pair.gsc_server)
                 if pair.meta_ads_server:
                     await stack.enter_async_context(pair.meta_ads_server)
-                for wp_server in pair.wordpress_servers:
-                    await stack.enter_async_context(wp_server)
+                for i, wp_server in enumerate(pair.wordpress_servers):
+                    try:
+                        await stack.enter_async_context(wp_server)
+                        print(f"[WordPress MCP] Server {i} connected successfully")
+                    except Exception as e:
+                        print(f"[WordPress MCP] Server {i} connection FAILED: {e}")
 
                 # Queue for multiplexing SDK events and out-of-band events (ask_user)
                 queue: asyncio.Queue[dict | object] = asyncio.Queue()
@@ -397,6 +406,7 @@ GA4 property_id: {property_id}
                 if pair.meta_ads_server:
                     mcp_servers.append(pair.meta_ads_server)
                 mcp_servers.extend(pair.wordpress_servers)
+                print(f"[Agent] MCP servers total: {len(mcp_servers)} (wordpress: {len(pair.wordpress_servers)})")
 
                 wp_labels = [
                     site.label for site in settings.get_wordpress_sites()
