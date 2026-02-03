@@ -31,11 +31,12 @@ frontend/  - Next.js 16 + React 19 + bun
 - **Auth**: Clerk (user auth) + Independent Google OAuth (GA4/GSC access)
 - **DB**: Supabase (PostgreSQL)
 - **AI**: OpenAI GPT-5.2 via Agents SDK with MCP servers
-- **MCP Servers**: analytics-mcp (GA4基本), scripts/ga4_extended_server.py (GA4拡張), scripts/gsc_server.py (GSC)
+- **MCP Servers**: analytics-mcp (GA4基本), scripts/ga4_extended_server.py (GA4拡張), scripts/gsc_server.py (GSC), meta-ads-mcp (Meta広告、オプション)
 - **情報ソース**:
   - OpenAI Agents SDK: https://github.com/openai/openai-agents-python
   - analytics-mcp (GA4): https://github.com/nicosalm/analytics-mcp（`pip install analytics-mcp` / MCP stdio）
   - GSC MCP 参考元: https://github.com/AminForou/mcp-gsc（これをベースにOAuth対応wrapper作成）
+  - meta-ads-mcp: https://github.com/pipeboard-co/meta-ads-mcp（`uv add meta-ads-mcp` / MCP stdio）
   - Clerk Next.js: https://clerk.com/docs/references/nextjs/overview
   - Next.js 16 App Router: https://nextjs.org/docs
   - TailwindCSS v4: https://tailwindcss.com/docs
@@ -62,6 +63,19 @@ frontend/  - Next.js 16 + React 19 + bun
 ## Environment Variables
 - Backend: `.env` in `backend/`
 - Frontend: `.env.local` in `frontend/`
+
+## Meta Ads MCP（オプション機能）
+- **有効化**: 環境変数 `META_ADS_ENABLED=true` + `META_ACCESS_TOKEN=<token>` を設定
+- **無効時**: デフォルトは無効。MCPサーバーは起動されず、システムプロンプトにもMeta広告セクションは含まれない
+- **認証方式**: `META_ACCESS_TOKEN` 環境変数で直接Meta APIトークンを指定（Pipeboard不要、OAuthコールバック無効化済み）
+- **接続方式**: stdio子プロセス（GA4/GSCと同じ`MCPServerStdio`パターン）
+- **UIへの表示**: なし（バックエンド設定のみで制御）
+- **パッケージ**: `meta-ads-mcp>=1.0.20`（`mcp[cli]==1.12.2` に依存、agents SDKとの互換性確認済み）
+- **注意**: meta-ads-mcpが`mcp==1.12.2`をピン留めしているため、mcpパッケージが1.26.0→1.12.2にダウングレードされる。現行のagents SDK v0.7.0+では問題なく動作することを確認済み
+- **実装ファイル**:
+  - `backend/app/config.py` — `meta_ads_enabled: bool`, `meta_access_token: str`
+  - `backend/app/services/mcp_manager.py` — `create_meta_ads_server()`, `MCPServerPair.meta_ads_server`
+  - `backend/app/services/agent_service.py` — Meta Ads MCPの接続 + システムプロンプト動的拡張
 
 ## Design Rules
 - Light mode only

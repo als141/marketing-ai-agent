@@ -170,8 +170,34 @@ class AgentService:
         self.mcp_manager = mcp_manager
 
     @staticmethod
-    def _build_system_prompt(property_id: str) -> str:
-        return f"""あなたはGA4とGoogle Search Console（GSC）の両方を使いこなすウェブ分析のプロフェッショナルです。
+    def _build_system_prompt(property_id: str, meta_ads_enabled: bool = False) -> str:
+        meta_ads_section = ""
+        if meta_ads_enabled:
+            meta_ads_section = """
+
+## Meta広告（Meta Ads）ツール使用ルール
+- Meta広告（Facebook/Instagram広告）のデータ取得・管理が可能。
+- 主要ツール:
+  - `get_ad_accounts`: 広告アカウント一覧
+  - `get_campaigns`: キャンペーン一覧
+  - `get_adsets`: 広告セット一覧
+  - `get_ads`: 広告一覧
+  - `get_insights`: パフォーマンスデータ（インプレッション、クリック、コスト、CVなど）
+  - `get_campaign_details` / `get_adset_details` / `get_ad_details`: 各レベルの詳細
+  - `search_interests` / `search_behaviors` / `search_geo_locations`: ターゲティング検索
+- GA4/GSCと組み合わせて、広告→サイト流入→CV の全体ファネルを分析せよ。
+- Meta広告の質問にはまず `get_ad_accounts` でアカウントを特定してから詳細データを取得せよ。
+
+## 使い分けガイド（Meta広告追加）
+| 質問のタイプ | 使うツール |
+|---|---|
+| Meta広告のパフォーマンス | Meta Ads: get_insights |
+| Meta広告のキャンペーン管理 | Meta Ads: get_campaigns, get_adsets, get_ads |
+| 広告→サイト→CVの全体分析 | Meta Ads + GA4 + GSC |
+| ターゲティング調査 | Meta Ads: search_interests, search_behaviors |
+"""
+
+        return f"""あなたはGA4とGoogle Search Console（GSC）{'とMeta広告' if meta_ads_enabled else ''}を使いこなすウェブ分析のプロフェッショナルです。
 ユーザーの質問に対して、まず行動（ツール実行）してからデータに基づいて回答します。
 
 ## 対象プロパティ
@@ -305,7 +331,7 @@ GA4 property_id: {property_id}
 - 「どちらの粒度がいいですか？」とユーザーに選択を委ねること → プロとして最適な粒度を自分で選べ。
 - ツールエラーをそのままユーザーに見せること → パラメータを直して再実行せよ。
 - 「API制約により取得できません」と言い訳すること → 別のパラメータやツールで代替取得を試みろ。
-"""
+{meta_ads_section}"""
 
     async def stream_chat(
         self,
@@ -322,6 +348,8 @@ GA4 property_id: {property_id}
             async with AsyncExitStack() as stack:
                 await stack.enter_async_context(pair.ga4_server)
                 await stack.enter_async_context(pair.gsc_server)
+                if pair.meta_ads_server:
+                    await stack.enter_async_context(pair.meta_ads_server)
 
                 # Queue for multiplexing SDK events and out-of-band events (ask_user)
                 queue: asyncio.Queue[dict | object] = asyncio.Queue()
@@ -336,11 +364,18 @@ GA4 property_id: {property_id}
                     conversation_id="",  # Will be set by the router
                 )
 
+                mcp_servers = [pair.ga4_server, pair.gsc_server]
+                if pair.meta_ads_server:
+                    mcp_servers.append(pair.meta_ads_server)
+
                 agent = Agent(
                     name="GA4 & GSC Analytics Agent",
-                    instructions=self._build_system_prompt(property_id),
+                    instructions=self._build_system_prompt(
+                        property_id,
+                        meta_ads_enabled=pair.meta_ads_server is not None,
+                    ),
                     model=settings.chat_model,
-                    mcp_servers=[pair.ga4_server, pair.gsc_server],
+                    mcp_servers=mcp_servers,
                     tools=[ask_user, render_chart],
                     model_settings=ModelSettings(
                         reasoning=Reasoning(effort="medium", summary="detailed"),

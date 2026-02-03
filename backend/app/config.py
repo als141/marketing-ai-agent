@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     reasoning_translate_model: str = "gpt-5-nano"
     max_tool_output_chars: int = 16000
 
+    # Meta Ads MCP
+    meta_ads_enabled: bool = False
+    meta_access_token: str = ""
+
     frontend_url: str = "http://localhost:3000"
     backend_url: str = "http://localhost:8000"
 

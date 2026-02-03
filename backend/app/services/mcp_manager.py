@@ -38,6 +38,7 @@ class MCPServerPair:
     gsc_server: MCPServerStdio
     ga4_creds_path: str
     gsc_creds_path: str
+    meta_ads_server: MCPServerStdio | None = None
 
 
 class MCPSessionManager:
@@ -99,15 +100,36 @@ class MCPSessionManager:
         )
         return server, creds_path
 
+    def create_meta_ads_server(self) -> MCPServerStdio | None:
+        """Create Meta Ads MCP server if enabled. Returns server or None."""
+        settings = get_settings()
+        if not settings.meta_ads_enabled or not settings.meta_access_token:
+            return None
+        server = MCPServerStdio(
+            params=MCPServerStdioParams(
+                command="meta-ads-mcp",
+                args=[],
+                env={
+                    "META_ACCESS_TOKEN": settings.meta_access_token,
+                    "META_ADS_DISABLE_CALLBACK_SERVER": "1",
+                },
+            ),
+            cache_tools_list=True,
+            client_session_timeout_seconds=120,
+        )
+        return server
+
     def create_server_pair(self, user_id: str, refresh_token: str) -> MCPServerPair:
-        """Create both GA4 and GSC servers with separate credential files."""
+        """Create GA4, GSC, and optionally Meta Ads servers."""
         ga4_server, ga4_creds = self.create_ga4_server(user_id, refresh_token)
         gsc_server, gsc_creds = self.create_gsc_server(user_id, refresh_token)
+        meta_ads_server = self.create_meta_ads_server()
         return MCPServerPair(
             ga4_server=ga4_server,
             gsc_server=gsc_server,
             ga4_creds_path=ga4_creds,
             gsc_creds_path=gsc_creds,
+            meta_ads_server=meta_ads_server,
         )
 
     def cleanup_server_pair(self, pair: MCPServerPair):
