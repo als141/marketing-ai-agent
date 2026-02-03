@@ -1,5 +1,16 @@
+import os
+from dataclasses import dataclass
+
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+
+
+@dataclass(frozen=True)
+class WordPressSite:
+    """A WordPress MCP site parsed from environment variables."""
+    label: str
+    server_url: str
+    authorization: str
 
 
 class Settings(BaseSettings):
@@ -30,6 +41,41 @@ class Settings(BaseSettings):
     backend_url: str = "http://localhost:8000"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+
+    def get_wordpress_sites(self) -> list[WordPressSite]:
+        """Parse WORDPRESS_*_MCP_SERVER_URL / WORDPRESS_*_MCP_AUTHORIZATION pairs from env.
+
+        Naming convention:
+          WORDPRESS_MCP_SERVER_URL + WORDPRESS_MCP_AUTHORIZATION          → label "wordpress"
+          WORDPRESS_ACHIEVE_MCP_SERVER_URL + WORDPRESS_ACHIEVE_MCP_AUTHORIZATION → label "wordpress_achieve"
+          WORDPRESS_FOO_MCP_SERVER_URL + WORDPRESS_FOO_MCP_AUTHORIZATION  → label "wordpress_foo"
+        """
+        sites: list[WordPressSite] = []
+        suffix = "_MCP_SERVER_URL"
+
+        for key, url in os.environ.items():
+            if not key.startswith("WORDPRESS_") or not key.endswith(suffix):
+                continue
+            if not url:
+                continue
+
+            # Extract middle part: WORDPRESS_{middle}_MCP_SERVER_URL
+            prefix_part = key[: -len(suffix)]  # e.g. "WORDPRESS" or "WORDPRESS_ACHIEVE"
+            auth_key = prefix_part + "_MCP_AUTHORIZATION"
+            authorization = os.environ.get(auth_key, "")
+            if not authorization:
+                continue
+
+            # Build label from middle part
+            label = prefix_part.lower()  # "wordpress" or "wordpress_achieve"
+
+            sites.append(WordPressSite(
+                label=label,
+                server_url=url,
+                authorization=authorization,
+            ))
+
+        return sites
 
 
 @lru_cache

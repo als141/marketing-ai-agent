@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
 import {
   Select,
@@ -24,6 +24,9 @@ export function PropertySelector({ selectedPropertyId, onSelect }: Props) {
   const [error, setError] = useState<string | null>(null);
   const { getToken } = useAuth();
 
+  const selectedPropertyIdRef = useRef(selectedPropertyId);
+  selectedPropertyIdRef.current = selectedPropertyId;
+
   useEffect(() => {
     async function load() {
       try {
@@ -34,9 +37,10 @@ export function PropertySelector({ selectedPropertyId, onSelect }: Props) {
         );
         setProperties(data);
         if (data.length > 0) {
-          if (selectedPropertyId) {
+          const currentId = selectedPropertyIdRef.current;
+          if (currentId) {
             // Restore full property object from saved property_id
-            const match = data.find((p) => p.property_id === selectedPropertyId);
+            const match = data.find((p) => p.property_id === currentId);
             if (match) onSelect(match);
           } else {
             onSelect(data[0]);
@@ -49,7 +53,8 @@ export function PropertySelector({ selectedPropertyId, onSelect }: Props) {
       }
     }
     load();
-  }, [getToken, onSelect, selectedPropertyId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [getToken]);
 
   if (loading) {
     return (

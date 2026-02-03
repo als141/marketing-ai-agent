@@ -31,7 +31,7 @@ frontend/  - Next.js 16 + React 19 + bun
 - **Auth**: Clerk (user auth) + Independent Google OAuth (GA4/GSC access)
 - **DB**: Supabase (PostgreSQL)
 - **AI**: OpenAI GPT-5.2 via Agents SDK with MCP servers
-- **MCP Servers**: analytics-mcp (GA4基本), scripts/ga4_extended_server.py (GA4拡張), scripts/gsc_server.py (GSC), meta-ads-mcp (Meta広告、オプション)
+- **MCP Servers**: analytics-mcp (GA4基本), scripts/ga4_extended_server.py (GA4拡張), scripts/gsc_server.py (GSC), meta-ads-mcp (Meta広告、オプション), WordPress MCP (Streamable HTTP、オプション・複数対応)
 - **情報ソース**:
   - OpenAI Agents SDK: https://github.com/openai/openai-agents-python
   - analytics-mcp (GA4): https://github.com/nicosalm/analytics-mcp（`pip install analytics-mcp` / MCP stdio）
@@ -76,6 +76,23 @@ frontend/  - Next.js 16 + React 19 + bun
   - `backend/app/config.py` — `meta_ads_enabled: bool`, `meta_access_token: str`
   - `backend/app/services/mcp_manager.py` — `create_meta_ads_server()`, `MCPServerPair.meta_ads_server`
   - `backend/app/services/agent_service.py` — Meta Ads MCPの接続 + システムプロンプト動的拡張
+
+## WordPress MCP（オプション機能・複数サイト対応）
+- **有効化**: 環境変数 `WORDPRESS_{LABEL}_MCP_SERVER_URL` + `WORDPRESS_{LABEL}_MCP_AUTHORIZATION` のペアを設定
+- **命名規則**:
+  - `WORDPRESS_MCP_SERVER_URL` + `WORDPRESS_MCP_AUTHORIZATION` → label "wordpress"
+  - `WORDPRESS_ACHIEVE_MCP_SERVER_URL` + `WORDPRESS_ACHIEVE_MCP_AUTHORIZATION` → label "wordpress_achieve"
+  - `WORDPRESS_FOO_MCP_SERVER_URL` + `WORDPRESS_FOO_MCP_AUTHORIZATION` → label "wordpress_foo"
+- **無効時**: 環境変数が未設定ならサーバーは起動されない
+- **接続方式**: `MCPServerStreamableHttp`（HTTP Streamable Transport）— GA4/GSCのstdioとは異なりHTTPで接続
+- **認証方式**: `Authorization` HTTPヘッダー（Basic認証）
+- **WordPress側の前提**: WordPress MCP Adapter プラグインがインストール済みであること
+- **UIへの表示**: なし（バックエンド環境変数のみで制御）
+- **動的パース**: `Settings.get_wordpress_sites()` が `os.environ` から `WORDPRESS_*_MCP_SERVER_URL` パターンを動的検出
+- **実装ファイル**:
+  - `backend/app/config.py` — `WordPressSite` dataclass + `get_wordpress_sites()`
+  - `backend/app/services/mcp_manager.py` — `create_wordpress_servers()`, `MCPServerPair.wordpress_servers`
+  - `backend/app/services/agent_service.py` — WordPress MCPの接続 + システムプロンプト動的拡張
 
 ## Design Rules
 - Light mode only

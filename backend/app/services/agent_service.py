@@ -170,7 +170,11 @@ class AgentService:
         self.mcp_manager = mcp_manager
 
     @staticmethod
-    def _build_system_prompt(property_id: str, meta_ads_enabled: bool = False) -> str:
+    def _build_system_prompt(
+        property_id: str,
+        meta_ads_enabled: bool = False,
+        wordpress_labels: list[str] | None = None,
+    ) -> str:
         meta_ads_section = ""
         if meta_ads_enabled:
             meta_ads_section = """
@@ -197,7 +201,30 @@ class AgentService:
 | ターゲティング調査 | Meta Ads: search_interests, search_behaviors |
 """
 
-        return f"""あなたはGA4とGoogle Search Console（GSC）{'とMeta広告' if meta_ads_enabled else ''}を使いこなすウェブ分析のプロフェッショナルです。
+        wordpress_section = ""
+        if wordpress_labels:
+            sites_list = ", ".join(wordpress_labels)
+            wordpress_section = f"""
+
+## WordPress MCP ツール使用ルール
+- 接続中のWordPressサイト: {sites_list}
+- WordPressの投稿・固定ページの取得、作成、更新、削除が可能。
+- 主なツール（WordPress MCP Adapter が提供するツール名はサーバーによって異なる場合がある。`list_tools` の結果に従え）:
+  - 投稿一覧取得 / 投稿作成 / 投稿更新 / 投稿削除
+  - 固定ページ一覧取得 / 固定ページ作成・更新
+  - カテゴリ・タグ管理
+  - メディア管理
+- 複数サイト接続時は、ツール名やパラメータでどのサイトに対する操作かを判別せよ。
+- SEO記事作成のワークフロー: GSCで検索クエリ分析 → キーワード選定 → WordPress投稿作成。
+"""
+
+        tools_desc = "GA4とGoogle Search Console（GSC）"
+        if meta_ads_enabled:
+            tools_desc += "とMeta広告"
+        if wordpress_labels:
+            tools_desc += "とWordPress"
+
+        return f"""あなたは{tools_desc}を使いこなすウェブ分析のプロフェッショナルです。
 ユーザーの質問に対して、まず行動（ツール実行）してからデータに基づいて回答します。
 
 ## 対象プロパティ
@@ -331,7 +358,7 @@ GA4 property_id: {property_id}
 - 「どちらの粒度がいいですか？」とユーザーに選択を委ねること → プロとして最適な粒度を自分で選べ。
 - ツールエラーをそのままユーザーに見せること → パラメータを直して再実行せよ。
 - 「API制約により取得できません」と言い訳すること → 別のパラメータやツールで代替取得を試みろ。
-{meta_ads_section}"""
+{meta_ads_section}{wordpress_section}"""
 
     async def stream_chat(
         self,
@@ -350,6 +377,8 @@ GA4 property_id: {property_id}
                 await stack.enter_async_context(pair.gsc_server)
                 if pair.meta_ads_server:
                     await stack.enter_async_context(pair.meta_ads_server)
+                for wp_server in pair.wordpress_servers:
+                    await stack.enter_async_context(wp_server)
 
                 # Queue for multiplexing SDK events and out-of-band events (ask_user)
                 queue: asyncio.Queue[dict | object] = asyncio.Queue()
@@ -367,12 +396,18 @@ GA4 property_id: {property_id}
                 mcp_servers = [pair.ga4_server, pair.gsc_server]
                 if pair.meta_ads_server:
                     mcp_servers.append(pair.meta_ads_server)
+                mcp_servers.extend(pair.wordpress_servers)
+
+                wp_labels = [
+                    site.label for site in settings.get_wordpress_sites()
+                ] if pair.wordpress_servers else []
 
                 agent = Agent(
                     name="GA4 & GSC Analytics Agent",
                     instructions=self._build_system_prompt(
                         property_id,
                         meta_ads_enabled=pair.meta_ads_server is not None,
+                        wordpress_labels=wp_labels,
                     ),
                     model=settings.chat_model,
                     mcp_servers=mcp_servers,
@@ -553,7 +588,18 @@ GA4 property_id: {property_id}
                     if not hasattr(content_item, "text"):
                         continue
 
-                    data = json.loads(content_item.text)
+                    raw_text = content_item.text
+                    if not raw_text or not raw_text.strip():
+                        print(f"[Properties] Skipping empty content item (is_error={getattr(result, 'is_error', None)})")
+                        continue
+
+                    print(f"[Properties] MCP raw response (first 500 chars): {raw_text[:500]}")
+
+                    try:
+                        data = json.loads(raw_text)
+                    except json.JSONDecodeError as je:
+                        print(f"[Properties] JSON parse error: {je}, raw text: {raw_text[:200]}")
+                        continue
 
                     accounts = []
                     if isinstance(data, dict):

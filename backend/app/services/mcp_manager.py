@@ -3,8 +3,8 @@ import os
 import sys
 import time
 from dataclasses import dataclass, field
-from agents.mcp import MCPServerStdio
-from agents.mcp.server import MCPServerStdioParams
+from agents.mcp import MCPServerStdio, MCPServerStreamableHttp
+from agents.mcp.server import MCPServerStdioParams, MCPServerStreamableHttpParams
 
 from app.config import get_settings
 from app.services.credentials_manager import CredentialsManager
@@ -33,12 +33,13 @@ class MCPSession:
 
 @dataclass
 class MCPServerPair:
-    """A pair of GA4 + GSC MCP servers with their credential paths for cleanup."""
+    """GA4 + GSC + optional extra MCP servers with credential paths for cleanup."""
     ga4_server: MCPServerStdio
     gsc_server: MCPServerStdio
     ga4_creds_path: str
     gsc_creds_path: str
     meta_ads_server: MCPServerStdio | None = None
+    wordpress_servers: list[MCPServerStreamableHttp] = field(default_factory=list)
 
 
 class MCPSessionManager:
@@ -59,7 +60,6 @@ class MCPSessionManager:
             refresh_token=refresh_token,
             client_id=settings.google_oauth_client_id,
             client_secret=settings.google_oauth_client_secret,
-            quota_project_id=settings.google_project_id,
             purpose=purpose,
         )
 
@@ -76,7 +76,6 @@ class MCPSessionManager:
                     "GOOGLE_APPLICATION_CREDENTIALS": creds_path,
                     "GOOGLE_CLOUD_PROJECT": settings.google_project_id,
                     "GCLOUD_PROJECT": settings.google_project_id,
-                    "GOOGLE_CLOUD_QUOTA_PROJECT": settings.google_project_id,
                 },
             ),
             cache_tools_list=True,
@@ -119,17 +118,36 @@ class MCPSessionManager:
         )
         return server
 
+    def create_wordpress_servers(self) -> list[MCPServerStreamableHttp]:
+        """Create WordPress MCP servers from environment variables."""
+        settings = get_settings()
+        sites = settings.get_wordpress_sites()
+        servers = []
+        for site in sites:
+            server = MCPServerStreamableHttp(
+                params=MCPServerStreamableHttpParams(
+                    url=site.server_url,
+                    headers={"Authorization": site.authorization},
+                ),
+                cache_tools_list=True,
+                client_session_timeout_seconds=120,
+            )
+            servers.append(server)
+        return servers
+
     def create_server_pair(self, user_id: str, refresh_token: str) -> MCPServerPair:
-        """Create GA4, GSC, and optionally Meta Ads servers."""
+        """Create GA4, GSC, and optionally Meta Ads / WordPress servers."""
         ga4_server, ga4_creds = self.create_ga4_server(user_id, refresh_token)
         gsc_server, gsc_creds = self.create_gsc_server(user_id, refresh_token)
         meta_ads_server = self.create_meta_ads_server()
+        wordpress_servers = self.create_wordpress_servers()
         return MCPServerPair(
             ga4_server=ga4_server,
             gsc_server=gsc_server,
             ga4_creds_path=ga4_creds,
             gsc_creds_path=gsc_creds,
             meta_ads_server=meta_ads_server,
+            wordpress_servers=wordpress_servers,
         )
 
     def cleanup_server_pair(self, pair: MCPServerPair):

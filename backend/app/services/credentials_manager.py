@@ -16,7 +16,6 @@ class CredentialsManager:
         refresh_token: str,
         client_id: str,
         client_secret: str,
-        quota_project_id: str = "",
         purpose: str = "ga4",
     ) -> str:
         """Create a credentials file for MCP subprocess use.
@@ -42,7 +41,6 @@ class CredentialsManager:
             "client_id": client_id,
             "client_secret": client_secret,
             "refresh_token": refresh_token,
-            "quota_project_id": quota_project_id,
         }
 
         fd = os.open(creds_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
